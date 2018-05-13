@@ -46,6 +46,11 @@ class JSONextractor:
                     self.numObject[self.classes.index(name)] += 1
         self.initStampa(self.classes, self.numObject)
 
+    def loadFile(self, url, destination):
+        file, message = urllib.request.urlretrieve(url)
+        shutil.copy(file, destination)
+        os.remove(file)
+
     def initStampa(self, ogg, num):
         print("there are ", len(ogg), " objects.")
         count = 0
@@ -65,9 +70,9 @@ class JSONextractor:
                 continue
             name = self.nomeBase + str(immNum)
             imm = b[immNum]['Labeled Data']
-            os.chdir(self.pngPath)
-            urllib.request.urlretrieve(imm, name + ".png")
-            self.converti(name)
+            # os.chdir(self.pngPath)
+            print("Loading image" + imm)
+            self.loadFile(imm, os.path.join(self.pngPath, name))
             labels = dict()
             for item in b[immNum]['Label'].keys():
                 labels[item] = len(b[immNum]['Label'][item])
@@ -76,13 +81,9 @@ class JSONextractor:
                 for x in b[immNum]['Masks'].keys():
                     name = x
                     name = self.nomeBase + str(immNum) + name + str(labels[x])
-                    # self.labels[self.classes.index(x)] += 1
                     imm = b[immNum]['Masks'][x]
-                    os.chdir(self.pngPath)
-                    urllib.request.urlretrieve(imm, name + ".png")
-                    os.chdir(self.bmpPath)
-                    self.converti(name)
-        shutil.rmtree(self.pngPath)
+                    print("Loading mask" + imm)
+                    self.loadFile(imm, os.path.join(self.pngPath, name))
 
     def stampa(self):
         print(self.keyDict)
@@ -91,7 +92,7 @@ class JSONextractor:
         path = self.pngPath + "/" + name + ".png"
         img = Image.open(path)
         file_out = self.bmpPath + "/" + name + ".bmp"
-        img.save(file_out)
+        img.save(file_out, "BMP")
 
     def testing(self):
         jsonPath = self.path
