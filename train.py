@@ -13,12 +13,12 @@ EVAL_PART = 0.1
 
 class TrainConfig(Config):
     NAME = "training"
+    IMAGES_PER_GPU = 1  # Reduces training time
 
     def __init__(self, dataset: utils.ProjectDataset):
         Config.NUM_CLASSES = len(dataset.classes) + 1
         super().__init__()
         self.pr_dataset = dataset
-
 
 
 class TrainDataset(mrcnn_utils.Dataset):
@@ -41,8 +41,8 @@ class TrainDataset(mrcnn_utils.Dataset):
         # aux = []
         # for x in range(h):
         #     aux.append(pixels[x * w: x * w + w])
-            # for y in range(w):
-            #     aux[x].append(pixels[x*h + y])
+        # for y in range(w):
+        #     aux[x].append(pixels[x*h + y])
 
         # return aux
         # return np.array(img.getdata(),
