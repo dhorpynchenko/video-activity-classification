@@ -2,7 +2,7 @@ import os
 import shutil
 import urllib.request
 
-from datashape import json
+import json
 
 LABEL = "Label"
 MASKS = "Masks"
@@ -19,6 +19,7 @@ class ImageData:
 
 
 def loadFile(url, destination):
+    print("Loading file " + url)
     file, message = urllib.request.urlretrieve(url)
     shutil.copy(file, destination)
     os.remove(file)

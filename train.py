@@ -1,3 +1,5 @@
+import skimage.io
+
 from PIL import Image
 
 from mrcnn.config import Config
@@ -10,11 +12,13 @@ EVAL_PART = 0.1
 
 
 class TrainConfig(Config):
+    NAME = "training"
 
     def __init__(self, dataset: utils.ProjectDataset):
+        Config.NUM_CLASSES = len(dataset.classes) + 1
         super().__init__()
         self.pr_dataset = dataset
-        super().NUM_CLASSES = len(dataset.classes) + 1
+
 
 
 class TrainDataset(mrcnn_utils.Dataset):
@@ -31,18 +35,19 @@ class TrainDataset(mrcnn_utils.Dataset):
             self.add_class(dataset.source, i, classes[i])
 
     def bmp_to_binary(self, path):
-        img = Image.open(path)
+        # img = Image.open(path)
         # h, w = img.size
         # pixels = list(img.getdata())
         # aux = []
         # for x in range(h):
-        #     aux.append([])
-        #     for y in range(w):
-        #         aux[x].append(pixels[x*h + y])
-        #
+        #     aux.append(pixels[x * w: x * w + w])
+            # for y in range(w):
+            #     aux[x].append(pixels[x*h + y])
+
         # return aux
-        return np.array(img.getdata(),
-                        np.uint8).reshape(img.size[1], img.size[0], 3)
+        # return np.array(img.getdata(),
+        #                 np.uint8).reshape(img.size[1], img.size[0], 3)
+        return skimage.io.imread(path)
 
     def add_dataset_image(self, id, image_data):
         self.add_image(self.pr_dataset.source,
@@ -50,7 +55,7 @@ class TrainDataset(mrcnn_utils.Dataset):
                        self.pr_dataset.get_image_file(self.dataset_dir, image_data, auto_load=True))
 
     def load_data_train(self):
-        for i in range(self.pr_dataset.images):
+        for i in range(len(self.pr_dataset.images)):
             if i not in self.eval_items:
                 self.add_dataset_image(i, self.pr_dataset.images[i])
 
@@ -60,10 +65,11 @@ class TrainDataset(mrcnn_utils.Dataset):
 
     def load_mask(self, image_id):
 
-        mask_files, class_ids = self.pr_dataset.get_mask_files(self.dataset_dir, self.pr_dataset.images[image_id])
+        mask_files, class_ids = self.pr_dataset.get_mask_files(self.dataset_dir, self.pr_dataset.images[image_id],
+                                                               auto_load=True)
         masks_bytes = []
         for file in mask_files:
-            mask_files.append(self.bmp_to_binary(file))
+            masks_bytes.append(self.bmp_to_binary(file))
 
         masks = np.stack(masks_bytes, axis=2).astype(np.bool)
         class_ids = np.array(class_ids, dtype=np.int32)
@@ -102,7 +108,9 @@ if __name__ == '__main__':
 
     # Load weights
     print("Loading weights ", model_path)
-    model.load_weights(model_path, by_name=True)
+    model.load_weights(model_path, by_name=True, exclude=[
+        "mrcnn_class_logits", "mrcnn_bbox_fc",
+        "mrcnn_bbox", "mrcnn_mask"])
 
     dataset_train = TrainDataset(dataset=dataset_info, dataset_dir=args.dataset_dir)
     dataset_train.load_data_train()
