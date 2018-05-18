@@ -33,7 +33,7 @@ def load_if_absent(url, file):
 class ProjectDataset:
     def __init__(self, json_file) -> None:
         super().__init__()
-        self.source = "Dima"
+        self.source = os.path.splitext(os.path.basename(json_file))[0]
         self.json_file = json.load(open(json_file))
         self.images = []
 
