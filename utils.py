@@ -47,7 +47,7 @@ class ProjectDataset:
 
             self.images.append(i)
             classes.update(item_labels.keys())
-        self.classes = list(classes)
+        self.classes = sorted(classes)
 
     def get_image_name(self, json_position):
         return "image" + str(json_position)
