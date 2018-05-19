@@ -1,6 +1,7 @@
 import utils
 
 import argparse
+import os
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(
@@ -13,6 +14,9 @@ parser.add_argument('--dataset_config', required=True,
                     help='Path to json file from labelbox')
 
 args = parser.parse_args()
+
+if not os.path.exists(os.path.abspath(args.dataset_dir)):
+    os.makedirs(os.path.abspath(args.dataset_dir))
 
 dataset = utils.ProjectDataset(args.dataset_config)
 dataset.load_dataset(args.dataset_dir)
