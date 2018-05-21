@@ -1,3 +1,11 @@
+# Program for instance segmentation by Adil C.P
+#To be used with Mask RCNN
+
+
+################################################################################
+"""Import Required Libraries"""
+################################################################################
+
 import os
 import sys
 import random
@@ -13,79 +21,80 @@ import utils
 import utils1
 import model as modellib
 import visualize
-import train
 import cv2
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-# Root directory of the project
+import train
+
+################################################################################
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' #Disable tensorflow logs
+
+################################################################################
+"""All required directories"""
+################################################################################
+
 ROOT_DIR = os.getcwd()
-### ball ['BG', 'snooker_table', 'cue_sticks', 'billiard_balls', 'hand', 'rubix_cube']
-# ['BG', 'snooker_table', 'billiard_balls', 'hand' 'rubix_cube', 'cue_sticks']
+MODEL_DIR = os.path.join(ROOT_DIR, "logs")
+my_model=('/home/adil_cp/Downloads/mask_rcnn_training_0026_final.h5')
+IMAGE_DIR = ('/home/adil_cp/Desktop/V&P')
+json_file='/home/adil_cp/Desktop/labelbox/beer_pong_labels.json'
 
+################################################################################
+"""Create dataset from exsisting dataset directory"""
+################################################################################
 
-# Directory to save logs and trained model
-MODEL_DIR = os.path.join(ROOT_DIR, "logs123")
-asd=('/home/adil_cp/Music/training20180518T0219/mask_rcnn_training_0010.h5')
-# Local path to trained weights file
-COCO_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_training_0002.h5")
-# Download COCO trained weights from Releases if needed
-if not os.path.exists(COCO_MODEL_PATH):
-    utils.download_trained_weights(COCO_MODEL_PATH)
 dataset=utils1.ProjectDataset
-"""class InferenceConfig(Config):
-    NAME = "inference"
-    IMAGES_PER_GPU = 1  # Reduces training time
-
-    def __init__(self,dataset):
-        print("######################"+'\n')
-        print(dataset)
-        Config.NUM_CLASSES = len(dataset.classes) + 1
-        super().__init__()
-        self.pr_dataset = dataset
-        print (Config.NUM_CLASSES)"""
-# Directory of images to run detection on
-IMAGE_DIR1 = ('/home/adil_cp/Desktop/V&P')
-IMAGE_DIR = ("/home/adil_cp/Documents/projects/vision/VPproject/frame")
-json_file='/home/adil_cp/Desktop/labelbox/labelbox1.json'
 dataset_info = utils1.ProjectDataset(json_file)
-class InferenceConfig(train.TrainConfig):
+
+################################################################################
+"""Inference class for the configuration details"""
+################################################################################
+class InferenceConfig(Config):
     # Set batch size to 1 since we'll be running inference on
     # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
     GPU_COUNT = 1
+    NAME = "training"
     IMAGES_PER_GPU = 1
     DETECTION_MIN_CONFIDENCE = 0.8
-config = InferenceConfig()
+    #NUM_CLASSES = 1 + 3
+    def __init__(self, dataset: utils1.ProjectDataset):
+        Config.NUM_CLASSES = len(dataset.classes) + 1
+        super().__init__()
+
+config = InferenceConfig(dataset=dataset_info)
 #config.display()
 
-# Create model object in inference mode.
-model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR, config=config)
+################################################################################
+"""Create model object in inference mode and Load Dataset"""
+################################################################################
 
-# Load weights trained on MS-COCO
-model.load_weights(asd, by_name=True)
-class_names1=list()
+model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR, config=config)
+model.load_weights(my_model, by_name=True)
 dataset=train.TrainDataset(dataset=dataset_info,dataset_dir='/home/adil_cp/Desktop/tst')
 dataset.load_data_train
 dataset.prepare()
-for i, info in enumerate(dataset.class_info):
-    #print(info['name'])
-    class_names1.append(info['name'])
-#print("Images: {}\nClasses: {}".format(len(dataset.image_ids), dataset.class_names))
-#class_names = ['BG','rubix_cube', 'snooker_table','billiard_balls','cue_sticks','hand']
-#dataset.
-print(class_names1)
 
-file_names = next(os.walk(IMAGE_DIR1))[2]
-print(len(file_names))
+################################################################################
+"""Setup the One hot encoding"""
+################################################################################
 
-for i in range(1):
+def class_names(dataset: utils1.ProjectDataset):
+    data=sorted(dataset.classes)
+    background=['BG']
+    class_names=background+data
+    return data
 
-    image = skimage.io.imread(os.path.join(IMAGE_DIR1, 'fa.jpg'))
 
-# Run detection
+class_names = class_names(dataset=dataset_info)
+print(class_names)
+
+################################################################################
+"""Predictions"""
+################################################################################
+
+file_names = next(os.walk(IMAGE_DIR))[2]
+for i in range(1):#Todo as per the video frames
+    image = skimage.io.imread(os.path.join(IMAGE_DIR, 'tst.jpg'))
     results = model.detect([image], verbose=1)
-    #print (results[0])
-
-# Visualize results
     r = results[0]
     a=visualize.display_instances(i, image , r['rois'], r['masks'], r['class_ids'],
-                            class_names1, r['scores'])
-    #cv2.imwrite("frame.jpg", a)
+                            class_names, r['scores'])
