@@ -25,6 +25,7 @@ import argparse
 from cv2 import VideoWriter, VideoWriter_fourcc, imread, resize
 from os import listdir
 from os.path import isfile, join
+import segmentation_support
 
 ################################################################################
 """Required Arguments"""
@@ -98,8 +99,8 @@ while success:
 """Create dataset from exsisting dataset directory"""
 ################################################################################
 
-dataset=utils.ProjectDataset
-dataset_info = utils.ProjectDataset(json_file)
+dataset=segmentation_support.ProjectDataset
+dataset_info = segmentation_support.ProjectDataset(json_file)
 
 ################################################################################
 """Inference class for the configuration details"""
@@ -113,7 +114,7 @@ class InferenceConfig(Config):
     IMAGES_PER_GPU = 1
     DETECTION_MIN_CONFIDENCE = 0.8
     #NUM_CLASSES = 1 + 3
-    def __init__(self, dataset: utils.ProjectDataset):
+    def __init__(self, dataset: segmentation_support.ProjectDataset):
         Config.NUM_CLASSES = len(dataset.classes) + 1
         super().__init__()
 
@@ -131,7 +132,7 @@ model.load_weights(my_model, by_name=True)
 """Setup the One hot encoding"""
 ################################################################################
 
-def class_names(dataset: utils.ProjectDataset):
+def class_names(dataset: segmentation_support.ProjectDataset):
     data=sorted(dataset.classes)
     background=['BG']
     class_names=background+data
