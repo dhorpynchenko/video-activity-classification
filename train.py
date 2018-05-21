@@ -27,6 +27,9 @@ class TrainDataset(mrcnn_utils.Dataset):
     @staticmethod
     def get_model_datasets(datasets: list, dataset_dir):
 
+        if not os.path.exists(os.path.abspath(dataset_dir)):
+            os.makedirs(os.path.abspath(dataset_dir))
+
         train_items = []
         eval_items = []
 

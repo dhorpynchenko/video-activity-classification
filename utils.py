@@ -8,6 +8,7 @@ LABEL = "Label"
 MASKS = "Masks"
 SKIP = "Skip"
 LABELED_DATA = "Labeled Data"
+ERROR = "error"
 
 
 class ImageData:
@@ -31,6 +32,16 @@ def load_if_absent(url, file):
 
 
 class ProjectDataset:
+
+    def check_url(self, url:str):
+        return url is not None and not url.startswith(ERROR)
+
+    def check_masks_urls(self, item_masks):
+        for mask in item_masks.keys():
+            if not self.check_url(item_masks[mask]):
+                return False
+        return True
+
     def __init__(self, json_file) -> None:
         super().__init__()
         self.source = os.path.splitext(os.path.basename(json_file))[0]
@@ -42,7 +53,12 @@ class ProjectDataset:
 
             item = self.json_file[i]
             item_labels = item[LABEL]
-            if item_labels == SKIP:
+            item_masks = item.get(MASKS, None)
+            # Check consistency
+            if item_labels == SKIP \
+                    or item_masks is None\
+                    or not self.check_url(item[LABELED_DATA])\
+                    or not self.check_masks_urls(item_masks):
                 continue
 
             self.images.append(i)
