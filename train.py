@@ -15,7 +15,7 @@ EVAL_PART = 0.1
 
 class TrainConfig(Config):
     NAME = "training"
-    IMAGES_PER_GPU = 1  # Reduces training time
+    IMAGES_PER_GPU = 2  # 1 reduces training time but gives an error https://github.com/matterport/Mask_RCNN/issues/521
 
     def __init__(self, datasets: list):
         Config.NUM_CLASSES = reduce(lambda n, dataset: n + len(dataset.classes), datasets, 0) + 1
