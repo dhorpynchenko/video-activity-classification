@@ -53,6 +53,9 @@ class SegmentationDataset(mrcnn_utils.Dataset):
         self.coco_len = len(coco_dataset.image_info)
         self.own_len = len(coco_dataset.image_info)
 
+        # Add BG id
+        self.coco_class_map = {0: 0}
+        self.own_class_map = {0: 0}
         # {
         #     "source": source,
         #     "id": class_id,
@@ -64,12 +67,14 @@ class SegmentationDataset(mrcnn_utils.Dataset):
                 # Skip BG
                 continue
             self.add_class(class_i["source"], id, class_i["name"])
+            self.coco_class_map[class_i["id"]] = id
 
         for class_i in own_dataset.class_info:
             if class_i["id"] == 0:
                 # Skip BG
                 continue
             self.add_class(class_i["source"], id, class_i["name"])
+            self.own_class_map[class_i["id"]] = id
 
         # image_info = {
         #     "id": image_id,
@@ -85,9 +90,16 @@ class SegmentationDataset(mrcnn_utils.Dataset):
 
     def load_mask(self, image_id):
         if image_id >= self.coco_len:
-            return self.own_dataset.load_mask(image_id - self.coco_len)
+            mask, class_ids = self.own_dataset.load_mask(image_id - self.coco_len)
+            class_map = self.own_class_map
         else:
-            return self.coco_dataset.load_mask(image_id)
+            mask, class_ids = self.coco_dataset.load_mask(image_id)
+            class_map = self.coco_class_map
+
+        for i in range(len(class_ids)):
+            class_ids[i] = int(class_map[class_ids[i]])
+
+        return mask, class_ids
 
 
 class OwnDataset(mrcnn_utils.Dataset):
