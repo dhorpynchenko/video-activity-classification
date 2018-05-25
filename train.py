@@ -62,9 +62,9 @@ if __name__ == '__main__':
     dataset_train.prepare()
     dataset_eval.prepare()
 
-    for i in dataset_train.image_info:
-        id = i.get("id")
-        print("For image " + i.get("path") + " masks are " + str(dataset_train.load_mask_path(id)[0]))
+    # for i in dataset_train.image_info:
+    #     id = i.get("id")
+    #     print("For image " + i.get("path") + " masks are " + str(dataset_train.load_mask_path(id)[0]))
 
     # Image Augmentation
     # Right/Left flip 50% of the time
