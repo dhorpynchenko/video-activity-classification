@@ -101,7 +101,16 @@ class SegmentationDataset(mrcnn_utils.Dataset):
             class_map = self.coco_class_map
 
         for i in range(len(class_ids)):
-            class_ids[i] = int(class_map[class_ids[i]])
+            id = class_ids[i]
+            # Handle COCO crowds
+            # A crowd box in COCO is a bounding box around several instances
+            if id < 0:
+                id = class_map[-id]
+                id *= -1
+            else:
+                id = class_map[id]
+
+            class_ids[i] = id
 
         return mask, class_ids
 
