@@ -135,7 +135,7 @@ class OwnDataset(mrcnn_utils.Dataset):
         class_names = set()
         source_names = set()
 
-        class_id = 1  # 0 id is for background
+
         for dataset in datasets:
 
             if dataset.source in source_names:
@@ -150,12 +150,12 @@ class OwnDataset(mrcnn_utils.Dataset):
             eval_items.append(eval)
             train_items.append(list(filter(lambda x: x not in eval, range(len(dataset.images)))))
 
-            for class_name in dataset.classes:
+            for class_id in range(len(dataset.classes)):
+                class_name = dataset.classes[class_id]
                 if class_name in class_names:
                     raise RuntimeError("Different json has same class names " + class_name)
                 classes_tuples.append({"source": dataset.source, "id": class_id, "class_name": class_name})
                 class_names.add(class_name)
-                class_id += 1
 
         return OwnDataset(classes_tuples, datasets, train_items, dataset_dirs), \
                OwnDataset(classes_tuples, datasets, eval_items, dataset_dirs)
