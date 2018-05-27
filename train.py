@@ -14,8 +14,8 @@ class TrainConfig(Config):
     NAME = "training"
     IMAGES_PER_GPU = 2  # 1 reduces training time but gives an error https://github.com/matterport/Mask_RCNN/issues/521
 
-    def __init__(self, datasets: list):
-        Config.NUM_CLASSES = reduce(lambda n, dataset: n + len(dataset.classes), datasets, 0) + 1
+    def __init__(self, dataset: SegmentationDataset):
+        Config.NUM_CLASSES = len(dataset.class_info)
         super().__init__()
 
 
@@ -46,7 +46,13 @@ if __name__ == '__main__':
     for item in args.dataset_config:
         dataset_info.append(utils.ProjectDataset(item))
 
-    config = TrainConfig(datasets=dataset_info)
+    dataset_train, dataset_eval = SegmentationDataset.get_model_datasets(own_datasets_configs=dataset_info,
+                                                                         dataset_dir=args.dataset_dir,
+                                                                         eval_fraction=EVAL_PART)
+    dataset_train.prepare()
+    dataset_eval.prepare()
+
+    config = TrainConfig(dataset=dataset_train)
     config.display()
 
     model = modellib.MaskRCNN(mode="training", config=config, model_dir=args.logs)
@@ -57,10 +63,6 @@ if __name__ == '__main__':
     model.load_weights(model_path, by_name=True, exclude=[
         "mrcnn_class_logits", "mrcnn_bbox_fc",
         "mrcnn_bbox", "mrcnn_mask"])
-
-    dataset_train, dataset_eval = SegmentationDataset.get_model_datasets(own_datasets_configs=dataset_info, dataset_dir=args.dataset_dir, eval_fraction=EVAL_PART)
-    dataset_train.prepare()
-    dataset_eval.prepare()
 
     # for i in dataset_train.image_info:
     #     id = i.get("id")

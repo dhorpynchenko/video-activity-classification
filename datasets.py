@@ -20,6 +20,10 @@ except Exception:
         raise Exception
 
 
+def get_source_id_string(source: str, id):
+    return "{}.{}".format(source, id)
+
+
 class SegmentationDataset(mrcnn_utils.Dataset):
 
     @staticmethod
@@ -53,30 +57,26 @@ class SegmentationDataset(mrcnn_utils.Dataset):
         self.coco_len = len(coco_dataset.image_info)
         self.own_len = len(coco_dataset.image_info)
 
-        # Add BG id
-        self.coco_class_map = {0: 0}
-        self.own_class_map = {0: 0}
         # {
         #     "source": source,
         #     "id": class_id,
         #     "name": class_name,
         # }
-        id = 1
         for class_i in coco_dataset.class_info:
             if class_i["id"] == 0:
                 # Skip BG
                 continue
-            self.add_class(class_i["source"], id, class_i["name"])
-            self.coco_class_map[class_i["id"]] = id
-            id += 1
+            self.add_class(class_i["source"],
+                           coco_dataset.map_source_class_id(get_source_id_string(class_i["source"], class_i["id"])),
+                           class_i["name"])
 
         for class_i in own_dataset.class_info:
             if class_i["id"] == 0:
                 # Skip BG
                 continue
-            self.add_class(class_i["source"], id, class_i["name"])
-            self.own_class_map[class_i["id"]] = id
-            id += 1
+            self.add_class(class_i["source"],
+                           own_dataset.map_source_class_id(get_source_id_string(class_i["source"], class_i["id"])),
+                           class_i["name"])
 
         # image_info = {
         #     "id": image_id,
@@ -94,25 +94,28 @@ class SegmentationDataset(mrcnn_utils.Dataset):
 
     def load_mask(self, image_id):
         if image_id >= self.coco_len:
-            mask, class_ids = self.own_dataset.load_mask(image_id - self.coco_len)
-            class_map = self.own_class_map
+            dataset = self.own_dataset
+            image_id = image_id - self.coco_len
         else:
-            mask, class_ids = self.coco_dataset.load_mask(image_id)
-            class_map = self.coco_class_map
+            dataset = self.coco_dataset
 
+        masks, class_ids = dataset.load_mask(image_id)
+
+        image = self.image_info[image_id]
         for i in range(len(class_ids)):
             id = class_ids[i]
             # Handle COCO crowds
             # A crowd box in COCO is a bounding box around several instances
             if id < 0:
-                id = class_map[-id]
+                id *= -1
+                id = self.map_source_class_id(get_source_id_string(image["source"], id))
                 id *= -1
             else:
-                id = class_map[id]
+                id = self.map_source_class_id(get_source_id_string(image["source"], id))
 
             class_ids[i] = id
 
-        return mask, class_ids
+        return masks, class_ids
 
 
 class OwnDataset(mrcnn_utils.Dataset):
@@ -207,7 +210,11 @@ class OwnDataset(mrcnn_utils.Dataset):
 
         dataset = self.pr_datasets[dataset_position]
         dataset_dir = self.dataset_dirs[dataset_position]
-        return dataset.get_mask_files(dataset_dir, dataset.images[dataset_item], auto_load=True)
+        mask_files, class_ids = dataset.get_mask_files(dataset_dir, dataset.images[dataset_item], auto_load=True)
+        # Map to current dataset ids
+        for i in range(len(class_ids)):
+            class_ids[i] = self.map_source_class_id(get_source_id_string(dataset.source, class_ids[i]))
+        return mask_files, class_ids
 
     def load_mask(self, image_id):
 
@@ -376,7 +383,7 @@ class CocoDataset(mrcnn_utils.Dataset):
         # of class IDs that correspond to each channel of the mask.
         for annotation in annotations:
             class_id = self.map_source_class_id(
-                "coco.{}".format(annotation['category_id']))
+                get_source_id_string("coco", annotation['category_id']))
             if class_id:
                 m = self.annToMask(annotation, image_info["height"],
                                    image_info["width"])
