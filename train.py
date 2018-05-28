@@ -1,9 +1,9 @@
-from functools import reduce
+import os
 
 import imgaug  # https://github.com/aleju/imgaug (pip3 install imageaug)
 
 import utils
-from datasets import SegmentationDataset
+from datasets import SegmentationDataset, get_source_id_string
 from mrcnn import model as modellib
 from mrcnn.config import Config
 
@@ -51,6 +51,12 @@ if __name__ == '__main__':
                                                                          eval_fraction=EVAL_PART)
     dataset_train.prepare()
     dataset_eval.prepare()
+
+    with open(os.path.join("log", "class_ids.txt"), "w") as f:
+        for class_item in dataset_train.class_info:
+            f.write("{}\t{}\n".format(
+                dataset_train.map_source_class_id(get_source_id_string(class_item["source"], class_item["id"])),
+                class_item["name"]))
 
     config = TrainConfig(dataset=dataset_train)
     config.display()
