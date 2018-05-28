@@ -63,17 +63,11 @@ class SegmentationDataset(mrcnn_utils.Dataset):
         #     "name": class_name,
         # }
         for class_i in coco_dataset.class_info:
-            if class_i["id"] == 0:
-                # Skip BG
-                continue
             self.add_class(class_i["source"],
                            coco_dataset.map_source_class_id(get_source_id_string(class_i["source"], class_i["id"])),
                            class_i["name"])
 
         for class_i in own_dataset.class_info:
-            if class_i["id"] == 0:
-                # Skip BG
-                continue
             self.add_class(class_i["source"],
                            own_dataset.map_source_class_id(get_source_id_string(class_i["source"], class_i["id"])),
                            class_i["name"])
