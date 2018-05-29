@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 from mrcnn.config import Config
 from mrcnn import model as modellib, utils as mrcnn_utils
 import coco
-import utils
+import labelbox
 import model as modellib
 import visualize
 import cv2

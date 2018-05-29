@@ -27,7 +27,8 @@ def get_source_id_string(source: str, id):
 class SegmentationDataset(mrcnn_utils.Dataset):
 
     @staticmethod
-    def get_model_datasets(own_datasets_configs: list, dataset_dir, eval_fraction=0.1):
+    def get_model_datasets(own_datasets_configs: list, dataset_dir, required_classes: list, eval_fraction=0.1,
+                           coco_own_fraction=0.55):
         own_train_dataset, own_eval_dataset = OwnDataset.get_model_datasets(own_datasets_configs, dataset_dir,
                                                                             eval_fraction)
 
@@ -46,10 +47,10 @@ class SegmentationDataset(mrcnn_utils.Dataset):
         dataset_val.load_coco(dataset_dir, "minival", auto_download=True)
         dataset_val.prepare()
 
-        return SegmentationDataset(dataset_train, own_train_dataset), SegmentationDataset(dataset_train,
-                                                                                          own_train_dataset)
+        return SegmentationDataset(dataset_train, own_train_dataset, required_classes, coco_own_fraction), \
+               SegmentationDataset(dataset_train, own_train_dataset, required_classes, coco_own_fraction)
 
-    def __init__(self, coco_dataset: mrcnn_utils.Dataset, own_dataset: mrcnn_utils.Dataset):
+    def __init__(self, coco_dataset: mrcnn_utils.Dataset, own_dataset: mrcnn_utils.Dataset, classes, coco_own_fraction):
         super().__init__(class_map=None)
         self.own_dataset = own_dataset
         self.coco_dataset = coco_dataset
@@ -128,7 +129,6 @@ class OwnDataset(mrcnn_utils.Dataset):
 
         class_names = set()
         source_names = set()
-
 
         for dataset in datasets:
 

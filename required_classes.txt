@@ -1,0 +1,33 @@
+# Our classes
+Hand Paper
+Hand Rock
+Hand Scissors
+ShuffleBoard
+beer pong balls
+beer pong caps
+beer pong table
+Board
+Rope
+Wall
+dart board
+darts
+persons
+players
+Kite
+Sky
+billiard_balls
+cue_sticks
+hand
+rubix_cube
+snooker_table
+Cells
+Number
+HULA
+Trees
+pinata
+pinata stick
+#Coco classes
+chair
+kite
+frisbee
+person

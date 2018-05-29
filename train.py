@@ -1,13 +1,16 @@
+import datetime
 import os
 
 import imgaug  # https://github.com/aleju/imgaug (pip3 install imageaug)
 
+import labelbox
 import utils
 from datasets import SegmentationDataset, get_source_id_string
 from mrcnn import model as modellib
 from mrcnn.config import Config
 
 EVAL_PART = 0.1
+DEFAULT_MODEL = "mask_rcnn_coco.h5"
 
 
 class TrainConfig(Config):
@@ -25,9 +28,13 @@ if __name__ == '__main__':
     # Parse command line arguments
     parser = argparse.ArgumentParser(
         description='Train Mask R-CNN')
-    parser.add_argument('--model', required=True,
+    parser.add_argument('--model',
                         metavar="/path/to/weights.h5",
                         help="Path to weights .h5 file")
+    parser.add_argument('--is_from_scratch', required=True,
+                        default=False,
+                        type=lambda x: (str(x).lower() == 'true'),
+                        help='Is training from scratch')
     parser.add_argument('--dataset_dir', required=True,
                         metavar="/path/to/coco/",
                         help='Directory of the MS-COCO dataset')
@@ -42,31 +49,35 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    required_classes = utils.load_required_classes("required_classes.txt")
+
     dataset_info = []
     for item in args.dataset_config:
-        dataset_info.append(utils.ProjectDataset(item))
+        dataset_info.append(labelbox.ProjectDataset(item))
 
     dataset_train, dataset_eval = SegmentationDataset.get_model_datasets(own_datasets_configs=dataset_info,
                                                                          dataset_dir=args.dataset_dir,
+                                                                         required_classes=required_classes,
                                                                          eval_fraction=EVAL_PART)
     dataset_train.prepare()
     dataset_eval.prepare()
 
-    with open(os.path.join("log", "class_ids.txt"), "w") as f:
+    config = TrainConfig(dataset=dataset_train)
+    config.display()
+
+    class_ids_file = os.path.join(args.logs, "class_ids_{:%Y%m%dT%H%M}.txt".format(datetime.datetime.now()))
+    with open(class_ids_file, "w") as f:
         for class_item in dataset_train.class_info:
             f.write("{}\t{}\n".format(
                 dataset_train.map_source_class_id(get_source_id_string(class_item["source"], class_item["id"])),
                 class_item["name"]))
 
-    config = TrainConfig(dataset=dataset_train)
-    config.display()
-
     model = modellib.MaskRCNN(mode="training", config=config, model_dir=args.logs)
     model_path = args.model
 
     # Load weights
-    print("Loading weights ", model_path)
-    model.load_weights(model_path, by_name=True, exclude=[
+    print("Loading weights %s, is from scratch %s", (model_path, str(args.is_from_scratch)))
+    model.load_weights(model_path, by_name=True, exclude=[] if not args.is_from_scratch else [
         "mrcnn_class_logits", "mrcnn_bbox_fc",
         "mrcnn_bbox", "mrcnn_mask"])
 

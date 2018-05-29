@@ -1,4 +1,4 @@
-import utils
+import labelbox
 
 import argparse
 import os
@@ -18,5 +18,5 @@ args = parser.parse_args()
 if not os.path.exists(os.path.abspath(args.dataset_dir)):
     os.makedirs(os.path.abspath(args.dataset_dir))
 
-dataset = utils.ProjectDataset(args.dataset_config)
+dataset = labelbox.ProjectDataset(args.dataset_config)
 dataset.load_dataset(args.dataset_dir)
