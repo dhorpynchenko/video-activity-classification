@@ -15,6 +15,7 @@ DEFAULT_MODEL = "mask_rcnn_coco.h5"
 
 class TrainConfig(Config):
     NAME = "training"
+    STEPS_PER_EPOCH = 1500
     IMAGES_PER_GPU = 2  # 1 reduces training time but gives an error https://github.com/matterport/Mask_RCNN/issues/521
 
     def __init__(self, dataset: SegmentationDataset):
@@ -93,7 +94,7 @@ if __name__ == '__main__':
     print("Training network heads")
     model.train(dataset_train, dataset_eval,
                 learning_rate=config.LEARNING_RATE,
-                epochs=40,
+                epochs=30,
                 layers='heads',
                 augmentation=augmentation)
 
@@ -102,7 +103,7 @@ if __name__ == '__main__':
     print("Fine tune Resnet stage 4 and up")
     model.train(dataset_train, dataset_eval,
                 learning_rate=config.LEARNING_RATE,
-                epochs=120,
+                epochs=20,
                 layers='4+',
                 augmentation=augmentation)
 
@@ -111,6 +112,6 @@ if __name__ == '__main__':
     print("Fine tune all layers")
     model.train(dataset_train, dataset_eval,
                 learning_rate=config.LEARNING_RATE / 10,
-                epochs=160,
+                epochs=20,
                 layers='all',
                 augmentation=augmentation)

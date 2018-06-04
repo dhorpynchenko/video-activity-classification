@@ -1,5 +1,6 @@
 import os
 import shutil
+import sys
 import urllib.request
 import zipfile
 
@@ -28,23 +29,31 @@ class SegmentationDataset(mrcnn_utils.Dataset):
 
     @staticmethod
     def get_model_datasets(own_datasets_configs: list, dataset_dir, required_classes: list, eval_fraction=0.1,
-                           coco_own_fraction=0.55):
+                           # Since on images of own dataset we have 1-3 labels but coco mostly only 1
+                           # we increase this value from 0.55 to 0.9
+                           coco_own_fraction=0.9):
         own_train_dataset, own_eval_dataset = OwnDataset.get_model_datasets(own_datasets_configs, dataset_dir,
-                                                                            eval_fraction)
+                                                                            required_classes, eval_fraction)
 
         own_eval_dataset.prepare()
         own_train_dataset.prepare()
 
+        train_coco_images = int(len(own_train_dataset.image_info) * coco_own_fraction)
+        eval_coco_images = int(len(own_eval_dataset.image_info) * coco_own_fraction)
+
         # Training dataset. Use the training set and 35K from the
         # validation set, as as in the Mask RCNN paper.
         dataset_train = CocoDataset()
-        dataset_train.load_coco(dataset_dir, "train", auto_download=True)
-        dataset_train.load_coco(dataset_dir, "valminusminival", auto_download=True)
+        dataset_train.load_coco(dataset_dir, "train", auto_download=True, class_names=required_classes,
+                                total_images=train_coco_images)
+        dataset_train.load_coco(dataset_dir, "valminusminival", auto_download=True, class_names=required_classes,
+                                total_images=train_coco_images)
         dataset_train.prepare()
 
         # Validation dataset
         dataset_val = CocoDataset()
-        dataset_val.load_coco(dataset_dir, "minival", auto_download=True)
+        dataset_val.load_coco(dataset_dir, "minival", auto_download=True, class_names=required_classes,
+                              total_images=eval_coco_images)
         dataset_val.prepare()
 
         return SegmentationDataset(dataset_train, own_train_dataset, required_classes, coco_own_fraction), \
@@ -116,7 +125,7 @@ class SegmentationDataset(mrcnn_utils.Dataset):
 class OwnDataset(mrcnn_utils.Dataset):
 
     @staticmethod
-    def get_model_datasets(datasets: list, dataset_dir, eval_fraction):
+    def get_model_datasets(datasets: list, dataset_dir, classes, eval_fraction):
 
         if not os.path.exists(os.path.abspath(dataset_dir)):
             os.makedirs(os.path.abspath(dataset_dir))
@@ -227,8 +236,8 @@ DEFAULT_DATASET_YEAR = "2014"
 
 
 class CocoDataset(mrcnn_utils.Dataset):
-    def load_coco(self, dataset_dir, subset, year=DEFAULT_DATASET_YEAR, class_ids=None,
-                  class_map=None, return_coco=False, auto_download=False):
+    def load_coco(self, dataset_dir, subset, year=DEFAULT_DATASET_YEAR, class_names=None,
+                  class_map=None, return_coco=False, auto_download=False, total_images=None):
         """Load a subset of the COCO dataset.
         dataset_dir: The root directory of the COCO dataset.
         subset: What to load (train, val, minival, valminusminival)
@@ -249,16 +258,22 @@ class CocoDataset(mrcnn_utils.Dataset):
             subset = "val"
         image_dir = "{}/{}{}".format(dataset_dir, subset, year)
 
-        # Load all classes or a subset?
-        if not class_ids:
-            # All classes
-            class_ids = sorted(coco.getCatIds())
+        # All classes
+        class_ids = sorted(coco.getCatIds())
+
+        # Only subset of classes
+        if class_names:
+            class_ids = list(filter(lambda id: coco.loadCats(id)[0]["name"] in class_names, class_ids))
+
+        images_per_class = sys.maxsize if total_images is None or total_images <= 0 else int(
+            total_images // len(class_ids))
 
         # All images or a subset?
         if class_ids:
             image_ids = []
             for id in class_ids:
-                image_ids.extend(list(coco.getImgIds(catIds=[id])))
+                images = list(coco.getImgIds(catIds=[id]))
+                image_ids.extend(images if len(images) < images_per_class else images[:images_per_class])
             # Remove duplicates
             image_ids = list(set(image_ids))
         else:

@@ -31,3 +31,13 @@ chair
 kite
 frisbee
 person
+bench
+backpack
+handbag
+sports ball
+baseball bat
+bottle
+cup
+couch
+dining table
+scissors
