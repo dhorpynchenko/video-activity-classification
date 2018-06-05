@@ -9,6 +9,8 @@ SKIP = "Skip"
 LABELED_DATA = "Labeled Data"
 ERROR = "error"
 
+bad_images = {"vpkitefly":[16, 35, 135, 152, 153, 154, 155, 159, 183, 209, 228, 253, 255, 307, 413, 443, 465, 509, 535, 547, 594, 601, 632, 637, 652, 654, 667]}
+
 
 class ImageData:
 
@@ -48,6 +50,7 @@ class ProjectDataset:
         self.images = []
 
         classes = set()
+        skip_images = bad_images.get(self.source, [])
         for i in range(len(self.json_file)):
 
             item = self.json_file[i]
@@ -57,7 +60,8 @@ class ProjectDataset:
             if item_labels == SKIP \
                     or item_masks is None \
                     or not self.check_url(item[LABELED_DATA]) \
-                    or not self.check_masks_urls(item_masks):
+                    or not self.check_masks_urls(item_masks)\
+                    or i in skip_images:
                 continue
 
             self.images.append(i)
