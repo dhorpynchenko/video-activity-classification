@@ -60,8 +60,7 @@ class ProjectDataset:
                     or not self.check_masks_urls(item_masks):
                 continue
 
-            if i == 509:
-                self.images.append(i)
+            self.images.append(i)
             classes.update(item_labels.keys())
         self.classes = sorted(classes)
 
