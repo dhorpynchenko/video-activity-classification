@@ -65,7 +65,7 @@ class SegmentationDataset(mrcnn_utils.Dataset):
         self.coco_dataset = coco_dataset
 
         self.coco_len = len(coco_dataset.image_info)
-        self.own_len = len(coco_dataset.image_info)
+        self.own_len = len(own_dataset.image_info)
 
         # {
         #     "source": source,
@@ -97,6 +97,9 @@ class SegmentationDataset(mrcnn_utils.Dataset):
             id += 1
 
     def load_mask(self, image_id):
+
+        image = self.image_info[image_id]
+
         if image_id >= self.coco_len:
             dataset = self.own_dataset
             image_id = image_id - self.coco_len
@@ -105,7 +108,6 @@ class SegmentationDataset(mrcnn_utils.Dataset):
 
         masks, class_ids = dataset.load_mask(image_id)
 
-        image = self.image_info[image_id]
         for i in range(len(class_ids)):
             id = class_ids[i]
             # Handle COCO crowds
