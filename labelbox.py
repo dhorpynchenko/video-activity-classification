@@ -33,7 +33,7 @@ def load_if_absent(url, file):
 class ProjectDataset:
 
     def check_url(self, url: str):
-        return url is not None and not url.startswith(ERROR)
+        return url is not None and len(url) > 0 and not url.startswith(ERROR)
 
     def check_masks_urls(self, item_masks):
         for mask in item_masks.keys():
