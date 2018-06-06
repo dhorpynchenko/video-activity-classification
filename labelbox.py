@@ -42,7 +42,7 @@ class ProjectDataset:
         for mask in item_masks.keys():
             if not self.check_url(item_masks[mask]):
                 return False
-        return True
+        return len(item_masks) > 0
 
     def __init__(self, json_file) -> None:
         super().__init__()
