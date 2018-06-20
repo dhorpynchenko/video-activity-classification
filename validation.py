@@ -1,3 +1,6 @@
+import skimage.io
+import skimage.color
+
 from PIL import Image
 import numpy as np
 
@@ -11,7 +14,7 @@ from validation_utils import coordToMatrix, find_centroid, compute_area, find_ma
 class ValidationConfig(Config):
     NAME = "training"
     STEPS_PER_EPOCH = 1500
-    IMAGES_PER_GPU = 2  # 1 reduces training time but gives an error https://github.com/matterport/Mask_RCNN/issues/521
+    IMAGES_PER_GPU = 1  # 1 reduces training time but gives an error https://github.com/matterport/Mask_RCNN/issues/521
     DETECTION_MIN_CONFIDENCE = 0.6
 
     def __init__(self, classes_ids):
@@ -31,7 +34,6 @@ if __name__ == '__main__':
                         help="Path to weights .h5 file")
     parser.add_argument('--classes', required=True,
                         metavar="/path/to/class_ids_file/",
-                        nargs="*",
                         help='Class ids files after training')
     parser.add_argument('--dataset_dir', required=True,
                         metavar="/path/to/coco/",
@@ -68,13 +70,22 @@ if __name__ == '__main__':
     correct = 0
 
 
-    def centreAnalisi(fig, h, w):
+    def centre_analisi(fig, h, w):
 
-        results = model.detect([fig], verbose=0)
+        # Load image
+        image = skimage.io.imread(fig)
+        # If grayscale. Convert to RGB for consistency.
+        if image.ndim != 3:
+            image = skimage.color.gray2rgb(image)
+        # If has an alpha channel, remove it for consistency
+        if image.shape[-1] == 4:
+            image = image[..., :3]
+
+        results = model.detect([image], verbose=0)
         r = results[0]
         ids = r['class_ids']
         maschere = r["masks"]
-        numMask = 0
+        numMasks = 0
         try:
             numMasks = maschere[0][0]
         except Exception as e:
@@ -107,11 +118,13 @@ if __name__ == '__main__':
 
     for dataset in dataset_info:
 
-        images_to_validate = dataset.images
+        images_to_validate = [dataset.images[0]]
 
         for image_id in images_to_validate:
 
-            im = Image.open(dataset.get_image_file(args.dataset_dir, image_id, True))
+            image_path = dataset.get_image_file(args.dataset_dir, image_id, True)
+            print("Processing image %s" % image_path)
+            im = Image.open(image_path)
             w, h = im.size
 
             image_masks = dataset.get_mask_coordinates(image_id)
@@ -140,7 +153,7 @@ if __name__ == '__main__':
                     idss.append(reversed_classes_ids.get(label))
                     max_coord.append(find_max_coord(x_coord, y_coord))
 
-            centroidi_lista_mask, idss_mask, aree_mask = centreAnalisi(im, w, h)
+            centroidi_lista_mask, idss_mask, aree_mask = centre_analisi(image_path, w, h)
             for indice in range(len(idss)):
                 total += 1
                 for indice_mask in range(len(idss_mask)):
