@@ -8,6 +8,7 @@ import utils
 from datasets import SegmentationDataset, get_source_id_string
 from mrcnn import model as modellib
 from mrcnn.config import Config
+from mrcnn.utils import Dataset
 
 EVAL_PART = 0.1
 DEFAULT_MODEL = "mask_rcnn_coco.h5"
@@ -18,7 +19,7 @@ class TrainConfig(Config):
     STEPS_PER_EPOCH = 1500
     IMAGES_PER_GPU = 2  # 1 reduces training time but gives an error https://github.com/matterport/Mask_RCNN/issues/521
 
-    def __init__(self, dataset: SegmentationDataset):
+    def __init__(self, dataset: Dataset):
         Config.NUM_CLASSES = len(dataset.class_info)
         super().__init__()
 

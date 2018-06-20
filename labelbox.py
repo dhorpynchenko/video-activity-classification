@@ -9,8 +9,8 @@ SKIP = "Skip"
 LABELED_DATA = "Labeled Data"
 ERROR = "error"
 
-bad_images = {"vpkitefly":[16, 35, 135, 152, 153, 154, 155, 159, 183, 209, 228, 253, 255, 307, 413, 443, 465, 509, 535,
-                           547, 594, 601, 632, 637, 652, 654, 667, 376, 606, 554]}
+bad_images = {"vpkitefly": [16, 35, 135, 152, 153, 154, 155, 159, 183, 209, 228, 253, 255, 307, 413, 443, 465, 509, 535,
+                            547, 594, 601, 632, 637, 652, 654, 667, 376, 606, 554]}
 
 
 class ImageData:
@@ -61,7 +61,7 @@ class ProjectDataset:
             if item_labels == SKIP \
                     or item_masks is None \
                     or not self.check_url(item[LABELED_DATA]) \
-                    or not self.check_masks_urls(item_masks)\
+                    or not self.check_masks_urls(item_masks) \
                     or i in skip_images:
                 continue
 
@@ -103,3 +103,28 @@ class ProjectDataset:
     def load_dataset_item(self, directory, json_position):
         self.get_image_file(directory, json_position, auto_load=True)
         self.get_mask_files(directory, json_position, auto_load=True)
+
+    def get_mask_coordinates(self, image_id):
+        """
+
+        :param image_id:
+        :return: dictionary: label:[list of masks with coordinates]
+        """
+        labels = self.json_file[image_id].get(LABEL, None)
+
+        masks = dict()
+        if labels:
+            for label in labels.keys():
+
+                masks_json = labels.get(label)
+                item = []
+
+                for mask in masks_json:
+                    coordinates = []
+                    for coordinate in mask:
+                        coordinates.append((coordinate['x'], coordinate['y']))
+                    if len(coordinates) > 0:
+                        item.append(coordinates)
+                if len(item) > 0:
+                    masks[label] = item
+        return masks
