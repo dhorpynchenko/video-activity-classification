@@ -1,3 +1,5 @@
+import os
+
 import skimage.io
 import skimage.color
 
@@ -85,34 +87,48 @@ if __name__ == '__main__':
         r = results[0]
         ids = r['class_ids']
         maschere = r["masks"]
+
+        # f = open("diocan.txt","w+")
+        # f.write(str(maschere))
+        # f.close()
+        # print(maschere)
         numMasks = 0
         try:
-            numMasks = maschere[0][0]
+            numMasks = len(maschere[0][0])
+            print(numMasks)
         except Exception as e:
             print(e)
             return 0
 
         maskRet = []
-        for i in range(numMasks):
-            img = np.zeros([h, w], dtype=np.bool)
-            maskRet.append(img)
+        # for i in range(numMasks):
+        #     img = np.zeros([h, w], dtype=np.bool)
+        #     maskRet.append(img)
+        for d in range(len(maschere[0][0])):
+            maskRet.append([])
+            for r in range(len(maschere)):
+                maskRet[d].append([])
+                for c in range(len(maschere[0])):
+                    maskRet[d][r].append((0, 0, 0))
         for r in range(len(maschere)):
-            for c in range(maschere[0]):
-                for h in range(maschere[0][0]):
+            for c in range(len(maschere[0])):
+                for h in range(len(maschere[0][0])):
                     if maschere[r][c][h]:
                         maskRet[h][r][c] = (255, 255, 255)
 
         '''
         for c in range(3):
         img[:, :, c] = np.where(indice == 1, 255, img[:, :, c])
+
         '''
+        dtype = int
         centroidi_ret = []
         aree = []
         for maskSingle in range(len(maskRet)):
-            image = Image.fromarray(img, 'RGB')
-            ww, hh = image.size
+            image = Image.fromarray(np.asarray(maskRet[maskSingle], np.uint8), 'RGB')
+            image.save("log/image{}.bmp".format(maskSingle))
             aree.append(compute_area(image))
-            ret = find_centroid(image, ww, hh)
+            ret = find_centroid(image)
             centroidi_ret.append(ret)
         return centroidi_ret, ids, aree
 
@@ -122,7 +138,8 @@ if __name__ == '__main__':
 
         for image_id in images_to_validate:
 
-            image_path = dataset.get_image_file(args.dataset_dir, image_id, True)
+            ds_dir = os.path.join(args.dataset_dir, dataset.source)
+            image_path = dataset.get_image_file(ds_dir, image_id, True)
             print("Processing image %s" % image_path)
             im = Image.open(image_path)
             w, h = im.size
@@ -157,9 +174,13 @@ if __name__ == '__main__':
             for indice in range(len(idss)):
                 total += 1
                 for indice_mask in range(len(idss_mask)):
-                    if (aree[indice] * 0.5) < aree_mask[indice_mask] and aree_mask[indice_mask] < (aree[indice] * 1.5):
+                    aree_indice = aree[indice]
+                    aree_mask_indice = aree_mask[indice_mask]
+                    if (aree_indice * 0.5) < aree_mask_indice and aree_mask_indice < (aree_indice * 1.5):
                         if cade_internamente(max_coord[indice], centroidi_lista_mask[indice_mask]):
-                            if idss_mask[indice_mask] == idss[indice]:
+                            idss_mask_indice = idss_mask[indice_mask]
+                            idss_indice = idss[indice]
+                            if idss_mask_indice == idss_indice:
                                 correct += 1
 
     print("Numero di successi: " + str(correct))

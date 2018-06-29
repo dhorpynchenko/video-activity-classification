@@ -22,7 +22,7 @@ def find_centroid(im):
                 XX += x
                 YY += y
                 count += 1
-    return XX / count, YY / count
+    return (XX / count, YY / count) if count > 0 else (0, 0)
 
 
 def compute_area(im):
