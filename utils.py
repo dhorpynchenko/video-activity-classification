@@ -13,7 +13,7 @@ def load_class_ids(file):
     with open(file) as file:
         for line in file.readlines():
             parts = line.split("\t")
-            classes[parts[0]] = parts[1].strip("\n")
+            classes[int(parts[0])] = parts[1].strip("\n")
     return classes
 
 def make_reversed_dict(dictionary: dict):

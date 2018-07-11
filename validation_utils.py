@@ -47,8 +47,8 @@ def find_max_coord(x, y):
             y_min = y[indice]
         if x[indice] > x_max:
             x_max = x[indice]
-        if y[indice] > x_max:
-            x_max = y[indice]
+        if y[indice] > y_max:
+            y_max = y[indice]
     return [x_max, x_min, y_max, y_min]
 
 

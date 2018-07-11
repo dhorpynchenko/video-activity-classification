@@ -1,4 +1,6 @@
+import datetime
 import os
+from functools import reduce
 
 import skimage.io
 import skimage.color
@@ -11,6 +13,8 @@ import utils
 from mrcnn.config import Config
 from mrcnn.model import MaskRCNN
 from validation_utils import coordToMatrix, find_centroid, compute_area, find_max_coord, cade_internamente
+
+IMAGES_PER_DATASET = 1
 
 
 class ValidationConfig(Config):
@@ -65,12 +69,10 @@ if __name__ == '__main__':
 
     # Load weights trained on MS-COCO
     model.load_weights(args.model, by_name=True, exclude=[])
+
+
     # "mrcnn_class_logits", "mrcnn_bbox_fc",
     # "mrcnn_bbox", "mrcnn_mask"])
-
-    total = 0
-    correct = 0
-
 
     def centre_analisi(fig, h, w):
 
@@ -95,7 +97,7 @@ if __name__ == '__main__':
         numMasks = 0
         try:
             numMasks = len(maschere[0][0])
-            print(numMasks)
+            print("Detected %s objects" % numMasks)
         except Exception as e:
             print(e)
             return 0
@@ -126,25 +128,37 @@ if __name__ == '__main__':
         aree = []
         for maskSingle in range(len(maskRet)):
             image = Image.fromarray(np.asarray(maskRet[maskSingle], np.uint8), 'RGB')
-            image.save("log/image{}.bmp".format(maskSingle))
+            # image.save("log/image{}.bmp".format(maskSingle))
+            # image.show("From model")
             aree.append(compute_area(image))
             ret = find_centroid(image)
             centroidi_ret.append(ret)
         return centroidi_ret, ids, aree
 
+
+    total = 0
+    correct = 0
+    results = dict()
+
     for dataset in dataset_info:
 
-        images_to_validate = [dataset.images[0]]
+        images_to_validate = np.random.choice(dataset.images, IMAGES_PER_DATASET)
 
         for image_id in images_to_validate:
 
             ds_dir = os.path.join(args.dataset_dir, dataset.source)
             image_path = dataset.get_image_file(ds_dir, image_id, True)
             print("Processing image %s" % image_path)
-            im = Image.open(image_path)
+            try:
+                im = Image.open(image_path)
+            except:
+                continue
             w, h = im.size
 
             image_masks = dataset.get_mask_coordinates(image_id)
+            masks, _ = dataset.get_mask_files(ds_dir, image_id, True)
+            # for item in masks:
+            #     Image.open(item).show("Original")
 
             maskMat = []
 
@@ -172,17 +186,44 @@ if __name__ == '__main__':
 
             centroidi_lista_mask, idss_mask, aree_mask = centre_analisi(image_path, w, h)
             for indice in range(len(idss)):
+
+                idss_indice = idss[indice]
+                class_results = results.get(classes_ids[idss_indice], None)
+                if class_results is None:
+                    class_results = [0, 0]
+                    results[classes_ids[idss_indice]] = class_results
+
+                class_results[0] += 1
                 total += 1
+
+                with open("log/debug/mask{}_image{}_mask{}".format(dataset.source, image_id, indice), 'w') as f:
+                    f.write("image {}\n".format(dataset.get_image_cloud_url(image_id)))
+                    f.write("id_orig {}\n".format(idss[indice]))
+                    f.write("ids_masks {} \n\n".format(idss_mask))
+                    f.write("centr_orig {} \n".format(str(centroidi_lista[indice])))
+                    f.write("centr_models {}\n".format(str(str(centroidi_lista_mask))))
+                    f.write("max {} \n\n".format(max_coord))
+                    f.write("aree_orig {} \n".format(aree[indice]))
+                    f.write("aree_masks {} \n".format(aree_mask))
                 for indice_mask in range(len(idss_mask)):
                     aree_indice = aree[indice]
                     aree_mask_indice = aree_mask[indice_mask]
                     if (aree_indice * 0.5) < aree_mask_indice and aree_mask_indice < (aree_indice * 1.5):
                         if cade_internamente(max_coord[indice], centroidi_lista_mask[indice_mask]):
                             idss_mask_indice = idss_mask[indice_mask]
-                            idss_indice = idss[indice]
                             if idss_mask_indice == idss_indice:
+                                class_results[1] += 1
                                 correct += 1
+
+    accuracy = correct / total
+
+    with open("log/validate_{:%Y%m%dT%H%M}.txt".format(datetime.datetime.now()), "w") as f:
+        for domain in results.keys():
+            t = results[domain][0]
+            c = results[domain][1]
+            f.write("{}: total {}, correct {}, accuracy {}\n".format(domain, t, c, str(c / t)))
+        f.write("\n\nTotal: total {}, correct {}, accuracy {}".format(total, correct, accuracy))
 
     print("Numero di successi: " + str(correct))
     print("Numero totale label: " + str(total))
-    print("Percentuale di successo: " + str(float(correct) / float(total)) + "%")
+    print("Percentuale di successo: %s" % accuracy)

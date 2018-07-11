@@ -76,11 +76,15 @@ class ProjectDataset:
         return self.get_image_name(json_position) + class_id
 
     def get_image_file(self, directory, id, auto_load=False):
-        json_item = self.json_file[id]
         image_name = os.path.join(directory, self.get_image_name(id))
         if auto_load:
-            load_if_absent(json_item[LABELED_DATA], image_name)
+            load_if_absent(self.get_image_cloud_url(id), image_name)
         return image_name
+
+    def get_image_cloud_url(self, id):
+        json_item = self.json_file[id]
+        return json_item[LABELED_DATA]
+
 
     def get_mask_files(self, directory, id, auto_load=False):
         json_item = self.json_file[id]
