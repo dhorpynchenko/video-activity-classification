@@ -14,7 +14,7 @@ from mrcnn.config import Config
 from mrcnn.model import MaskRCNN
 from validation_utils import coordToMatrix, find_centroid, compute_area, find_max_coord, cade_internamente
 
-IMAGES_PER_DATASET = 1
+IMAGES_PER_DATASET = 10
 
 
 class ValidationConfig(Config):
@@ -71,10 +71,12 @@ if __name__ == '__main__':
     model.load_weights(args.model, by_name=True, exclude=[])
 
 
+    def get_output_matrix_save_filename(source, image_id, mask_index):
+        return "log/debug/images/{}_image{}_r_mask{}.bmp".format(source, image_id, mask_index)
     # "mrcnn_class_logits", "mrcnn_bbox_fc",
     # "mrcnn_bbox", "mrcnn_mask"])
 
-    def centre_analisi(fig, h, w):
+    def centre_analisi(fig):
 
         # Load image
         image = skimage.io.imread(fig)
@@ -123,17 +125,17 @@ if __name__ == '__main__':
         img[:, :, c] = np.where(indice == 1, 255, img[:, :, c])
 
         '''
-        dtype = int
         centroidi_ret = []
         aree = []
+        images = []
         for maskSingle in range(len(maskRet)):
             image = Image.fromarray(np.asarray(maskRet[maskSingle], np.uint8), 'RGB')
-            # image.save("log/image{}.bmp".format(maskSingle))
+            images.append(image)
             # image.show("From model")
             aree.append(compute_area(image))
             ret = find_centroid(image)
             centroidi_ret.append(ret)
-        return centroidi_ret, ids, aree
+        return centroidi_ret, ids, aree, images
 
 
     total = 0
@@ -143,10 +145,10 @@ if __name__ == '__main__':
     for dataset in dataset_info:
 
         images_to_validate = np.random.choice(dataset.images, IMAGES_PER_DATASET)
+        ds_dir = os.path.join(args.dataset_dir, dataset.source)
 
         for image_id in images_to_validate:
 
-            ds_dir = os.path.join(args.dataset_dir, dataset.source)
             image_path = dataset.get_image_file(ds_dir, image_id, True)
             print("Processing image %s" % image_path)
             try:
@@ -184,7 +186,11 @@ if __name__ == '__main__':
                     idss.append(reversed_classes_ids.get(label))
                     max_coord.append(find_max_coord(x_coord, y_coord))
 
-            centroidi_lista_mask, idss_mask, aree_mask = centre_analisi(image_path, w, h)
+            centroidi_lista_mask, idss_mask, aree_mask, images = centre_analisi(image_path)
+
+            for i in range(len(images)):
+                images[i].save(get_output_matrix_save_filename(dataset.source, image_id, i))
+
             for indice in range(len(idss)):
 
                 idss_indice = idss[indice]
@@ -196,8 +202,13 @@ if __name__ == '__main__':
                 class_results[0] += 1
                 total += 1
 
-                with open("log/debug/mask{}_image{}_mask{}".format(dataset.source, image_id, indice), 'w') as f:
-                    f.write("image {}\n".format(dataset.get_image_cloud_url(image_id)))
+                with open("log/debug/{}_image{}_o_mask{}.txt".format(dataset.source, image_id, indice), 'w') as f:
+                    f.write("Image:\n{}\n".format(dataset.get_image_cloud_url(image_id)))
+                    for i in range(len(masks)):
+                        f.write("Original mask{}\n{}\n".format(i, masks[i]))
+                    for i in range(len(images)):
+                        f.write("Recognized mask {}\n {}\n".format(i, get_output_matrix_save_filename(dataset.source, image_id, i)))
+                    f.write("Original mask:\n{}\n".format(dataset.get_image_cloud_url(image_id)))
                     f.write("id_orig {}\n".format(idss[indice]))
                     f.write("ids_masks {} \n\n".format(idss_mask))
                     f.write("centr_orig {} \n".format(str(centroidi_lista[indice])))
@@ -205,15 +216,23 @@ if __name__ == '__main__':
                     f.write("max {} \n\n".format(max_coord))
                     f.write("aree_orig {} \n".format(aree[indice]))
                     f.write("aree_masks {} \n".format(aree_mask))
-                for indice_mask in range(len(idss_mask)):
-                    aree_indice = aree[indice]
-                    aree_mask_indice = aree_mask[indice_mask]
-                    if (aree_indice * 0.5) < aree_mask_indice and aree_mask_indice < (aree_indice * 1.5):
-                        if cade_internamente(max_coord[indice], centroidi_lista_mask[indice_mask]):
-                            idss_mask_indice = idss_mask[indice_mask]
-                            if idss_mask_indice == idss_indice:
-                                class_results[1] += 1
-                                correct += 1
+
+                    for indice_mask in range(len(idss_mask)):
+                        aree_indice = aree[indice]
+                        aree_mask_indice = aree_mask[indice_mask]
+                        idss_mask_indice = idss_mask[indice_mask]
+                        if idss_mask_indice == idss_indice:
+                            if (aree_indice * 0.5) < aree_mask_indice < (aree_indice * 1.5):
+                                if cade_internamente(max_coord[indice], centroidi_lista_mask[indice_mask]):
+                                    class_results[1] += 1
+                                    correct += 1
+                                    f.write("Mask {} accepted!\n".format(indice_mask))
+                                else:
+                                    f.write("Mask {} rejected because of COOR\n".format(indice_mask))
+                            else:
+                                f.write("Mask {} rejected because of AREA\n".format(indice_mask))
+                        else:
+                            f.write("Mask {} rejected because of ID\n".format(indice_mask))
 
     accuracy = correct / total
 
