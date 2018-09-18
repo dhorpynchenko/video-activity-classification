@@ -15,6 +15,7 @@ from mrcnn.model import MaskRCNN
 from validation_utils import coordToMatrix, find_centroid, compute_area, find_max_coord, cade_internamente
 
 IMAGES_PER_DATASET = 10
+COORDINATES_MARGIN = 60
 
 
 class ValidationConfig(Config):
@@ -223,7 +224,7 @@ if __name__ == '__main__':
                         idss_mask_indice = idss_mask[indice_mask]
                         if idss_mask_indice == idss_indice:
                             if (aree_indice * 0.5) < aree_mask_indice < (aree_indice * 1.5):
-                                if cade_internamente(max_coord[indice], centroidi_lista_mask[indice_mask]):
+                                if cade_internamente(max_coord[indice], centroidi_lista_mask[indice_mask], COORDINATES_MARGIN):
                                     class_results[1] += 1
                                     correct += 1
                                     f.write("Mask {} accepted!\n".format(indice_mask))

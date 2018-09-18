@@ -51,11 +51,9 @@ def find_max_coord(x, y):
             y_max = y[indice]
     return [x_max, x_min, y_max, y_min]
 
-MARGIN = 60
-
-def cade_internamente(max, centroide):
-    if centroide[0] < max[0] + MARGIN and centroide[0] > max[1] - MARGIN:
-        if centroide[1] < max[2] + MARGIN and centroide[1] > max[3] - MARGIN:
+def cade_internamente(max, centroide, margin):
+    if centroide[0] < max[0] + margin and centroide[0] > max[1] - margin:
+        if centroide[1] < max[2] + margin and centroide[1] > max[3] - margin:
             # return attributes
             return True
     return False
