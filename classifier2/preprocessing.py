@@ -11,32 +11,9 @@ import tensorflow as tf
 import numpy as np
 from utils import int64_feature, bytes_feature
 from datetime import datetime
+from classifier2.model import ModelConfig
 
-MAX_FRAMES_PER_SECOND = 1
-MAX_FRAMES = 25
-OUTPUT_SIZE = 224
-
-# Parse command line arguments
-parser = argparse.ArgumentParser(
-    description='Extract features from frames')
-
-parser.add_argument('--input_dir', required=True,
-                    metavar="/path/to/json/",
-                    help='Path to directory with activity/activity/video files')
-parser.add_argument('--output_dir', required=True,
-                    metavar="/path/to/json/",
-                    help='Path to directory for output')
-parser.add_argument('--classes', required=True,
-                    metavar="/path/to/class_ids_file/",
-                    help='Class ids files after training')
-parser.add_argument('--model',
-                    metavar="/path/to/weights.h5",
-                    help="Path to weights .h5 file")
-
-args = parser.parse_args()
-
-
-# Mask-RCNN model
+MAX_VIDEOS_PER_CLASS = 20
 
 class PreprocConfig(Config):
     NAME = "preproc"
@@ -46,16 +23,6 @@ class PreprocConfig(Config):
     def __init__(self, classes_ids):
         Config.NUM_CLASSES = len(classes_ids)
         super().__init__()
-
-
-classes_ids = utils.load_class_ids(args.classes)
-config = PreprocConfig(classes_ids)
-
-# Create model object in inference mode.
-model = MaskRCNN(mode="inference", model_dir="./log", config=config)
-
-# Load weights trained on MS-COCO
-model.load_weights(args.model, by_name=True, exclude=[])
 
 
 def _convert_to_example(image, label):
@@ -73,70 +40,103 @@ def _convert_to_example(image, label):
     return example
 
 
-activity_list = os.listdir(args.input_dir)
-for i, activity in enumerate(activity_list):
+def main(args):
+    # Mask-RCNN model
+    classes_ids = utils.load_class_ids(args.classes)
+    config = PreprocConfig(classes_ids)
 
-    output_activity_dir = os.path.join(args.output_dir, activity)
-    if not os.path.exists(output_activity_dir):
-        os.makedirs(output_activity_dir)
+    # Create model object in inference mode.
+    model = MaskRCNN(mode="inference", model_dir="./log", config=config)
 
-    curr_activ_path = os.path.join(args.input_dir, activity)
-    video_list = os.listdir(curr_activ_path)
-    for video_name in video_list:
+    # Load weights trained on MS-COCO
+    model.load_weights(args.model, by_name=True, exclude=[])
 
-        curr_video_path = os.path.join(curr_activ_path, video_name)
-        video_output_path = os.path.join(output_activity_dir, "{}.tfrecord".format(os.path.splitext(video_name)[0]))
+    activity_list = os.listdir(args.input_dir)
+    for i, activity in enumerate(activity_list):
 
-        if not os.path.exists(curr_activ_path):
-            os.makedirs(curr_activ_path)
+        output_activity_dir = os.path.join(args.output_dir, activity)
+        if not os.path.exists(output_activity_dir):
+            os.makedirs(output_activity_dir)
 
-        writer = tf.python_io.TFRecordWriter(video_output_path)
-        vidcap = cv2.VideoCapture(curr_video_path)
+        curr_activ_path = os.path.join(args.input_dir, activity)
+        video_list = os.listdir(curr_activ_path)
+        for video_name in video_list[:MAX_VIDEOS_PER_CLASS]:
 
-        if not vidcap.isOpened():
-            print("could not open %s" % curr_video_path)
-            continue
+            curr_video_path = os.path.join(curr_activ_path, video_name)
+            video_output_path = os.path.join(output_activity_dir, "{}.tfrecord".format(os.path.splitext(video_name)[0]))
 
-        length = int(vidcap.get(cv2.CAP_PROP_FRAME_COUNT))
-        width = int(vidcap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(vidcap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fps = vidcap.get(cv2.CAP_PROP_FPS)
+            if not os.path.exists(curr_activ_path):
+                os.makedirs(curr_activ_path)
 
-        print("Processing video %s from activity %s. Total frames %s, %s x %s, fps %s" % (
-            video_name, activity, length, width, height, fps))
+            writer = tf.python_io.TFRecordWriter(video_output_path)
+            vidcap = cv2.VideoCapture(curr_video_path)
 
-        interval = max(1, length // MAX_FRAMES)
-
-        count = 0
-        while True:
-            success, image = vidcap.read()
-            if not success:
-                break
-
-            # image = cv2.resize(image, (OUTPUT_SIZE, int(image.shape[1] * OUTPUT_SIZE / image.shape[0])))
-            # time = datetime.now()
-            image = cv2.resize(image, (OUTPUT_SIZE, OUTPUT_SIZE))
-            results = model.detect([image], verbose=0)
-            # print("Detecting took %s ms" % (datetime.now() - time))
-            # time = datetime.now()
-            r = results[0]
-            ids = r['class_ids']
-            maschere = r["masks"]
-
-            if len(ids) == 0:
+            if not vidcap.isOpened():
+                print("could not open %s" % curr_video_path)
                 continue
 
-            # Apply mask to original image
-            for r in range(min(maschere.shape[0], image.shape[0])):
-                for c in range(min(maschere.shape[1], image.shape[1])):
-                    if not np.any(maschere[r, c]):
-                        image[r][c] = (0, 0, 0)
+            length = int(vidcap.get(cv2.CAP_PROP_FRAME_COUNT))
+            width = int(vidcap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(vidcap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            fps = vidcap.get(cv2.CAP_PROP_FPS)
 
-            example = _convert_to_example(image, ids)
-            # print("Converting took %s ms" % (datetime.now() - time))
-            writer.write(example.SerializeToString())
+            print("Processing video %s from activity %s. Total frames %s, %s x %s, fps %s" % (
+                video_name, activity, length, width, height, fps))
 
-            count += 1
-            vidcap.set(cv2.CAP_PROP_POS_FRAMES, (count * interval))
-        print("Count %s" % count)
-        writer.close()
+            interval = max(1, length // ModelConfig.SEQUENCE_LENGTH)
+
+            count = 0
+            while True:
+                success, image = vidcap.read()
+                if not success:
+                    break
+
+                # image = cv2.resize(image, (OUTPUT_SIZE, int(image.shape[1] * OUTPUT_SIZE / image.shape[0])))
+                # time = datetime.now()
+                image = cv2.resize(image, (ModelConfig.FRAME_SIZE, ModelConfig.FRAME_SIZE))
+                results = model.detect([image], verbose=0)
+                # print("Detecting took %s ms" % (datetime.now() - time))
+                # time = datetime.now()
+                r = results[0]
+                ids = r['class_ids']
+                maschere = r["masks"]
+
+                if len(ids) == 0:
+                    continue
+
+                # Apply mask to original image
+                for r in range(min(maschere.shape[0], image.shape[0])):
+                    for c in range(min(maschere.shape[1], image.shape[1])):
+                        if not np.any(maschere[r, c]):
+                            image[r][c] = (0, 0, 0)
+
+                example = _convert_to_example(image, ids)
+                # print("Converting took %s ms" % (datetime.now() - time))
+                writer.write(example.SerializeToString())
+
+                count += 1
+                vidcap.set(cv2.CAP_PROP_POS_FRAMES, (count * interval))
+            print("Count %s" % count)
+            writer.close()
+
+
+if __name__ == '__main__':
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+        description='Extract features from frames')
+
+    parser.add_argument('--input_dir', required=True,
+                        metavar="/path/to/json/",
+                        help='Path to directory with activity/activity/video files')
+    parser.add_argument('--output_dir', required=True,
+                        metavar="/path/to/json/",
+                        help='Path to directory for output')
+    parser.add_argument('--classes', required=True,
+                        metavar="/path/to/class_ids_file/",
+                        help='Class ids files after training')
+    parser.add_argument('--model',
+                        metavar="/path/to/weights.h5",
+                        help="Path to weights .h5 file")
+
+    args = parser.parse_args()
+    main(args)

@@ -1,8 +1,15 @@
 from keras import Sequential
 from keras.applications.vgg16 import VGG16
+from keras.layers import Bidirectional, LSTM, Dense, Activation
 from keras.preprocessing import image
 from keras.applications.vgg16 import preprocess_input
 import numpy as np
+import keras.layers
+
+
+class ModelConfig:
+    SEQUENCE_LENGTH = 25
+    FRAME_SIZE = 224
 
 
 class FrameFeaturesExtractor:
@@ -35,9 +42,15 @@ class RNNModel:
 
     def __init__(self, is_training=False) -> None:
         self.model = Sequential()
+        self.model.add(Bidirectional(LSTM(10, return_sequences=True), input_shape=(5, 10)))
+        # self.model.add(Bidirectional(LSTM(10)))
+        self.model.add(Dense(5))
+        self.model.add(Activation('softmax'))
+        self.model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
 
-    def classify(self, frames: list):
-        pass
+    def classify(self, frames):
+        # classes = self.model.predict(x_test, batch_size=128)
+        return 0
 
-    def train(self):
+    def train(self, dataset_folder):
         pass
