@@ -1,0 +1,142 @@
+import argparse
+import os
+
+import cv2
+from PIL import Image
+
+import utils
+from mrcnn.config import Config
+from mrcnn.model import MaskRCNN
+import tensorflow as tf
+import numpy as np
+from utils import int64_feature, bytes_feature
+from datetime import datetime
+
+MAX_FRAMES_PER_SECOND = 1
+MAX_FRAMES = 25
+OUTPUT_SIZE = 224
+
+# Parse command line arguments
+parser = argparse.ArgumentParser(
+    description='Extract features from frames')
+
+parser.add_argument('--input_dir', required=True,
+                    metavar="/path/to/json/",
+                    help='Path to directory with activity/activity/video files')
+parser.add_argument('--output_dir', required=True,
+                    metavar="/path/to/json/",
+                    help='Path to directory for output')
+parser.add_argument('--classes', required=True,
+                    metavar="/path/to/class_ids_file/",
+                    help='Class ids files after training')
+parser.add_argument('--model',
+                    metavar="/path/to/weights.h5",
+                    help="Path to weights .h5 file")
+
+args = parser.parse_args()
+
+
+# Mask-RCNN model
+
+class PreprocConfig(Config):
+    NAME = "preproc"
+    IMAGES_PER_GPU = 1  # 1 reduces training time but gives an error https://github.com/matterport/Mask_RCNN/issues/521
+    DETECTION_MIN_CONFIDENCE = 0.6
+
+    def __init__(self, classes_ids):
+        Config.NUM_CLASSES = len(classes_ids)
+        super().__init__()
+
+
+classes_ids = utils.load_class_ids(args.classes)
+config = PreprocConfig(classes_ids)
+
+# Create model object in inference mode.
+model = MaskRCNN(mode="inference", model_dir="./log", config=config)
+
+# Load weights trained on MS-COCO
+model.load_weights(args.model, by_name=True, exclude=[])
+
+
+def _convert_to_example(image, label):
+    example = tf.train.Example(features=tf.train.Features(feature={
+        'image/height': int64_feature(image.shape[1]),
+        'image/width': int64_feature(image.shape[0]),
+        'image/ids': int64_feature(label),
+        # 'image/colorspace': _bytes_feature(tf.compat.as_bytes(colorspace)),
+        # 'image/channels': _int64_feature(channels),
+        # 'image/class/label': _int64_feature(label),
+        # 'image/class/text': _bytes_feature(tf.compat.as_bytes(text)),
+        # 'image/format': _bytes_feature(tf.compat.as_bytes(image_format)),
+        # 'image/filename': _bytes_feature(tf.compat.as_bytes(os.path.basename(filename))),
+        'image/array': bytes_feature(image.tobytes(order='C'))}))
+    return example
+
+
+activity_list = os.listdir(args.input_dir)
+for i, activity in enumerate(activity_list):
+
+    output_activity_dir = os.path.join(args.output_dir, activity)
+    if not os.path.exists(output_activity_dir):
+        os.makedirs(output_activity_dir)
+
+    curr_activ_path = os.path.join(args.input_dir, activity)
+    video_list = os.listdir(curr_activ_path)
+    for video_name in video_list:
+
+        curr_video_path = os.path.join(curr_activ_path, video_name)
+        video_output_path = os.path.join(output_activity_dir, "{}.tfrecord".format(os.path.splitext(video_name)[0]))
+
+        if not os.path.exists(curr_activ_path):
+            os.makedirs(curr_activ_path)
+
+        writer = tf.python_io.TFRecordWriter(video_output_path)
+        vidcap = cv2.VideoCapture(curr_video_path)
+
+        if not vidcap.isOpened():
+            print("could not open %s" % curr_video_path)
+            continue
+
+        length = int(vidcap.get(cv2.CAP_PROP_FRAME_COUNT))
+        width = int(vidcap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(vidcap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = vidcap.get(cv2.CAP_PROP_FPS)
+
+        print("Processing video %s from activity %s. Total frames %s, %s x %s, fps %s" % (
+            video_name, activity, length, width, height, fps))
+
+        interval = max(1, length // MAX_FRAMES)
+
+        count = 0
+        while True:
+            success, image = vidcap.read()
+            if not success:
+                break
+
+            # image = cv2.resize(image, (OUTPUT_SIZE, int(image.shape[1] * OUTPUT_SIZE / image.shape[0])))
+            # time = datetime.now()
+            image = cv2.resize(image, (OUTPUT_SIZE, OUTPUT_SIZE))
+            results = model.detect([image], verbose=0)
+            # print("Detecting took %s ms" % (datetime.now() - time))
+            # time = datetime.now()
+            r = results[0]
+            ids = r['class_ids']
+            maschere = r["masks"]
+
+            if len(ids) == 0:
+                continue
+
+            # Apply mask to original image
+            for r in range(min(maschere.shape[0], image.shape[0])):
+                for c in range(min(maschere.shape[1], image.shape[1])):
+                    if not np.any(maschere[r, c]):
+                        image[r][c] = (0, 0, 0)
+
+            example = _convert_to_example(image, ids)
+            # print("Converting took %s ms" % (datetime.now() - time))
+            writer.write(example.SerializeToString())
+
+            count += 1
+            vidcap.set(cv2.CAP_PROP_POS_FRAMES, (count * interval))
+        print("Count %s" % count)
+        writer.close()
