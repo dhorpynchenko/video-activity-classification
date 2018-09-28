@@ -15,7 +15,7 @@ from utils import int64_feature, bytes_feature
 from datetime import datetime
 from classifier2.model import ModelConfig
 
-MAX_VIDEOS_PER_CLASS = 10
+MAX_VIDEOS_PER_CLASS = 100
 
 
 class PreprocConfig(Config):
@@ -41,6 +41,11 @@ def _convert_to_example(image, label):
         # 'image/filename': _bytes_feature(tf.compat.as_bytes(os.path.basename(filename))),
         'image/array': bytes_feature(image.tobytes(order='C'))}))
     return example
+
+class Preprocessing:
+
+    def __init__(self) -> None:
+        pass
 
 
 def main(args):

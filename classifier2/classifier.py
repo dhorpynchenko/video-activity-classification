@@ -29,5 +29,8 @@ parser.add_argument('--mrcnn_weights',
 
 args = parser.parse_args()
 
+
+
+
 model = RNNModel(False)
 

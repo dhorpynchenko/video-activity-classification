@@ -89,3 +89,16 @@ bar = tqdm(range(TOTAL_EPOCHS))
 for i in bar:
     for x_batch, y_batch in read_dataset(ModelConfig.BATCH_SIZE, ModelConfig.SEQUENCE_LENGTH):
         r = model.train(x_batch, y_batch)
+
+if not os.path.exists(args.models_dir):
+    os.makedirs(args.models_dir)
+model.save(args.models_dir, "weights")
+
+total = 0
+correct = 0
+for frames, ids in read_dataset(20, ModelConfig.SEQUENCE_LENGTH):
+    p = model.classify(frames)
+    c = np.intersect1d(p, ids)
+    total += len(frames)
+    correct = len(c)
+print("Evaluate %s" % (correct / total))
