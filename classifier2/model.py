@@ -1,15 +1,17 @@
+import os
+
+import numpy as np
 from keras import Sequential
 from keras.applications.vgg16 import VGG16
-from keras.layers import Bidirectional, LSTM, Dense, Activation
-from keras.preprocessing import image
 from keras.applications.vgg16 import preprocess_input
-import numpy as np
-import keras.layers
+from keras.layers import Bidirectional, LSTM, Dense, Activation
+from keras.utils.np_utils import to_categorical
 
 
 class ModelConfig:
-    SEQUENCE_LENGTH = 25
+    SEQUENCE_LENGTH = 40
     FRAME_SIZE = 224
+    BATCH_SIZE = 64
 
 
 class FrameFeaturesExtractor:
@@ -40,11 +42,13 @@ class RNNModel:
     BiLSTM -> FCL -> Softmax layer -> Activity id
     """
 
-    def __init__(self, is_training=False) -> None:
+    def __init__(self, embedding_size, classes_count, is_training=False) -> None:
+        self.classes_count = classes_count
         self.model = Sequential()
-        self.model.add(Bidirectional(LSTM(10, return_sequences=True), input_shape=(5, 10)))
-        # self.model.add(Bidirectional(LSTM(10)))
-        self.model.add(Dense(5))
+        self.model.add(Bidirectional(LSTM(10, return_sequences=True),
+                                     input_shape=(ModelConfig.SEQUENCE_LENGTH, embedding_size)))
+        self.model.add(Bidirectional(LSTM(10)))
+        self.model.add(Dense(classes_count))
         self.model.add(Activation('softmax'))
         self.model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
 
@@ -52,5 +56,12 @@ class RNNModel:
         # classes = self.model.predict(x_test, batch_size=128)
         return 0
 
-    def train(self, dataset_folder):
-        pass
+    def train(self, x_batch, y_batch):
+        y_batch = to_categorical(y_batch, self.classes_count)
+        self.model.train_on_batch(x_batch, y_batch)
+
+    def save(self, dir, filename):
+        self.model.save_weights(os.path.join(dir, "{}.h5".format(filename)), True)
+
+    def restore(self, path):
+        self.model.load_weights(path)

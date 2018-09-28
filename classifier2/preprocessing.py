@@ -1,5 +1,7 @@
 import argparse
 import os
+import shutil
+import tempfile
 
 import cv2
 from PIL import Image
@@ -13,7 +15,8 @@ from utils import int64_feature, bytes_feature
 from datetime import datetime
 from classifier2.model import ModelConfig
 
-MAX_VIDEOS_PER_CLASS = 20
+MAX_VIDEOS_PER_CLASS = 10
+
 
 class PreprocConfig(Config):
     NAME = "preproc"
@@ -60,7 +63,11 @@ def main(args):
 
         curr_activ_path = os.path.join(args.input_dir, activity)
         video_list = os.listdir(curr_activ_path)
-        for video_name in video_list[:MAX_VIDEOS_PER_CLASS]:
+        videos_processed = len(os.listdir(output_activity_dir))
+        for video_name in video_list:
+
+            if videos_processed >= MAX_VIDEOS_PER_CLASS:
+                break
 
             curr_video_path = os.path.join(curr_activ_path, video_name)
             video_output_path = os.path.join(output_activity_dir, "{}.tfrecord".format(os.path.splitext(video_name)[0]))
@@ -68,56 +75,73 @@ def main(args):
             if not os.path.exists(curr_activ_path):
                 os.makedirs(curr_activ_path)
 
-            writer = tf.python_io.TFRecordWriter(video_output_path)
-            vidcap = cv2.VideoCapture(curr_video_path)
-
-            if not vidcap.isOpened():
-                print("could not open %s" % curr_video_path)
+            if os.path.exists(video_output_path):
                 continue
 
-            length = int(vidcap.get(cv2.CAP_PROP_FRAME_COUNT))
-            width = int(vidcap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            height = int(vidcap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            fps = vidcap.get(cv2.CAP_PROP_FPS)
+            fd, tfile_path = tempfile.mkstemp()
+            try:
 
-            print("Processing video %s from activity %s. Total frames %s, %s x %s, fps %s" % (
-                video_name, activity, length, width, height, fps))
+                writer = tf.python_io.TFRecordWriter(tfile_path)
+                vidcap = cv2.VideoCapture(curr_video_path)
 
-            interval = max(1, length // ModelConfig.SEQUENCE_LENGTH)
-
-            count = 0
-            while True:
-                success, image = vidcap.read()
-                if not success:
-                    break
-
-                # image = cv2.resize(image, (OUTPUT_SIZE, int(image.shape[1] * OUTPUT_SIZE / image.shape[0])))
-                # time = datetime.now()
-                image = cv2.resize(image, (ModelConfig.FRAME_SIZE, ModelConfig.FRAME_SIZE))
-                results = model.detect([image], verbose=0)
-                # print("Detecting took %s ms" % (datetime.now() - time))
-                # time = datetime.now()
-                r = results[0]
-                ids = r['class_ids']
-                maschere = r["masks"]
-
-                if len(ids) == 0:
+                if not vidcap.isOpened():
+                    print("could not open %s" % curr_video_path)
                     continue
 
-                # Apply mask to original image
-                for r in range(min(maschere.shape[0], image.shape[0])):
-                    for c in range(min(maschere.shape[1], image.shape[1])):
-                        if not np.any(maschere[r, c]):
-                            image[r][c] = (0, 0, 0)
+                length = int(vidcap.get(cv2.CAP_PROP_FRAME_COUNT))
+                width = int(vidcap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                height = int(vidcap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                fps = vidcap.get(cv2.CAP_PROP_FPS)
 
-                example = _convert_to_example(image, ids)
-                # print("Converting took %s ms" % (datetime.now() - time))
-                writer.write(example.SerializeToString())
+                print("Processing video %s from activity %s. Total frames %s, %s x %s, fps %s" % (
+                    video_name, activity, length, width, height, fps))
 
-                count += 1
-                vidcap.set(cv2.CAP_PROP_POS_FRAMES, (count * interval))
-            print("Count %s" % count)
-            writer.close()
+                interval = max(1, length // ModelConfig.SEQUENCE_LENGTH)
+
+                count = 0
+                skipping = 0
+                while count < ModelConfig.SEQUENCE_LENGTH:
+                    success, image = vidcap.read()
+                    if not success:
+                        break
+
+                    # image = cv2.resize(image, (OUTPUT_SIZE, int(image.shape[1] * OUTPUT_SIZE / image.shape[0])))
+                    # time = datetime.now()
+                    image = cv2.resize(image, (ModelConfig.FRAME_SIZE, ModelConfig.FRAME_SIZE))
+                    results = model.detect([image], verbose=0)
+                    # print("Detecting took %s ms" % (datetime.now() - time))
+                    # time = datetime.now()
+                    r = results[0]
+                    ids = r['class_ids']
+                    maschere = r["masks"]
+
+                    if len(ids) == 0 or skipping > 100:
+                        skipping += 1
+                        print("Skipping frame %s" % skipping)
+                        vidcap.set(cv2.CAP_PROP_POS_FRAMES, (count * interval) + (skipping * int(fps)))
+                        continue
+
+                    skipping = 0
+                    print("Taking frame %s" % count)
+                    # Apply mask to original image
+                    for r in range(min(maschere.shape[0], image.shape[0])):
+                        for c in range(min(maschere.shape[1], image.shape[1])):
+                            if not np.any(maschere[r, c]):
+                                image[r][c] = (0, 0, 0)
+
+                    example = _convert_to_example(image, ids)
+                    # print("Converting took %s ms" % (datetime.now() - time))
+                    writer.write(example.SerializeToString())
+
+                    count += 1
+                    vidcap.set(cv2.CAP_PROP_POS_FRAMES, (count * interval))
+                print("Count %s" % count)
+                writer.close()
+                shutil.copyfile(tfile_path, video_output_path)
+            finally:
+                os.close(fd)
+                os.remove(tfile_path)
+            videos_processed += 1
 
 
 if __name__ == '__main__':

@@ -1,3 +1,6 @@
+import os
+import pickle
+
 import tensorflow as tf
 import numpy as np
 
@@ -35,3 +38,16 @@ def int64_feature(value):
 def bytes_feature(value):
     """Wrapper for inserting bytes features into Example proto."""
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+
+
+def save_obj(obj, name):
+    with open(name, 'wb') as f:
+        pickle.dump(obj, f, 0)
+
+
+def load_obj(name):
+    if os.path.exists(name):
+        with open(name, 'rb') as f:
+            return pickle.load(f)
+    else:
+        return None
