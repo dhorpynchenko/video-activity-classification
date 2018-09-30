@@ -100,13 +100,13 @@ class Preprocessing:
                 image = cv2.resize(image, (ModelConfig.FRAME_SIZE, ModelConfig.FRAME_SIZE))
                 ids, maschere = self.process_image_mrcnn(image)
 
-                if skipping > 100:
+                if skipping > 40:
                     break
 
                 if len(ids) == 0:
                     skipping += 1
                     print("Skipping frame %s" % skipping)
-                    vidcap.set(cv2.CAP_PROP_POS_FRAMES, (count * interval) + (skipping * int(fps)))
+                    vidcap.set(cv2.CAP_PROP_POS_FRAMES, (count * interval) + (skipping * int(fps / 2)))
                     continue
 
                 skipping = 0

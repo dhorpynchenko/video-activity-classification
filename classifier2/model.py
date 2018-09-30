@@ -28,7 +28,7 @@ class FrameFeaturesExtractor:
     def __init__(self) -> None:
         self.extractor = VGG16(weights='imagenet', include_top=False)
 
-    def extract_features(self, image, size_tuple=(224, 224)):
+    def extract_features(self, image, ids_detected, size_tuple=(224, 224)):
         # img = image.load_img(img_path, target_size=size_tuple)
         # x = image.img_to_array(img)
         x = np.expand_dims(image, axis=0)
@@ -58,7 +58,7 @@ class RNNModel:
     def get_log_callback(self):
         pass
 
-    def classify(self, frames, ids):
+    def classify(self, frames):
         frames = self._check_pad_sequence(frames)
         classes = self.model.predict(frames, batch_size=frames.shape[0])
         return np.argmax(classes, 1)

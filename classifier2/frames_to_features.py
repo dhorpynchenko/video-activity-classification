@@ -38,6 +38,8 @@ def main(args):
         if not os.path.exists(output_activity_dir):
             os.makedirs(output_activity_dir)
 
+        utils.clear_folder(output_activity_dir)
+
         curr_activ_path = os.path.join(args.input_dir, activity)
         video_list = os.listdir(curr_activ_path)
         for video_name in video_list:
@@ -63,10 +65,12 @@ def main(args):
                             .int64_list
                             .value[0])
 
+                ids = input_example.features.feature['image/ids'].int64_list.value
+
                 image = np.frombuffer(input_example.features.feature['image/array'].bytes_list.value[0], np.uint8)
                 image = image.reshape((width, height, 3))
 
-                features = extractor.extract_features(image)
+                features = extractor.extract_features(image, ids)
                 examples = _convert_to_example(features)
                 for item in examples:
                     writer.write(item.SerializeToString())

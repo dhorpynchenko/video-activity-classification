@@ -6,7 +6,7 @@ from classifier2.preprocessing import Preprocessing
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(
-    description='Extract features from frames')
+    description='Classify video/videos provided')
 
 parser.add_argument('--video', required=True,
                     metavar="/path/to/json/",
@@ -41,10 +41,10 @@ frames = []
 ids = []
 
 for frame_ids, frame in preprocessing.process_video(args.video):
-    frames.append(extractor.extract_features(frame[0]))
+    frames.append(extractor.extract_features(frame[0], frame_ids))
     ids.append(frame_ids)
 
-activity_id = model.classify(frames, ids)
+activity_id = model.classify(frames)
 activity_name = activity_classes[activity_id]
 
 print("Video %s has %s activity" % (args.video, activity_name))

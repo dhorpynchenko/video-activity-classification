@@ -1,5 +1,6 @@
 import os
 import pickle
+import shutil
 
 import tensorflow as tf
 import numpy as np
@@ -51,3 +52,11 @@ def load_obj(name):
             return pickle.load(f)
     else:
         return None
+
+
+def clear_folder(path):
+    for root, dirs, files in os.walk(path):
+        for f in files:
+            os.unlink(os.path.join(root, f))
+        for d in dirs:
+            shutil.rmtree(os.path.join(root, d))
