@@ -3,7 +3,7 @@ import os
 import tensorflow as tf
 
 import utils
-from classifier2.model import RNNModel, ModelConfig
+from classifier2.model import RNNModel, ModelConfig, FrameFeaturesExtractor
 import numpy as np
 from classifier2.frames_to_features import CLASS_IDS_FILENAME, INFORMATION_FILENAME, Information
 from random import shuffle
@@ -84,7 +84,7 @@ def read_dataset(batch_size, sequence_size):
         yield np.asarray(x_batch), np.asarray(y_batch)
 
 
-model = RNNModel(dataset_info.embedding_sizes, len(activity_dict), is_training=True)
+model = RNNModel(FrameFeaturesExtractor.OUTPUT_SIZE, len(activity_dict), is_training=True)
 bar = tqdm(range(TOTAL_EPOCHS))
 for i in bar:
     for x_batch, y_batch in read_dataset(ModelConfig.BATCH_SIZE, ModelConfig.SEQUENCE_LENGTH):

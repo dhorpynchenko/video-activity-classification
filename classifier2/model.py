@@ -16,6 +16,7 @@ class ModelConfig:
 
 
 class FrameFeaturesExtractor:
+    OUTPUT_SIZE = 7 * 7 * 512
     """
 
     VGG -> Additional features concatenations -> TFRecord file
@@ -46,7 +47,7 @@ class RNNModel:
     def __init__(self, embedding_size, classes_count, is_training=False) -> None:
         self.classes_count = classes_count
         self.model = Sequential()
-        self.model.add(Bidirectional(LSTM(10, return_sequences=True),
+        self.model.add(Bidirectional(LSTM(256, return_sequences=True),
                                      input_shape=(ModelConfig.SEQUENCE_LENGTH, embedding_size)))
         self.model.add(Reshape((-1,)))
         self.model.add(Dense(classes_count))
@@ -57,12 +58,17 @@ class RNNModel:
     def get_log_callback(self):
         pass
 
-    def classify(self, frames):
-        classes = self.model.predict(frames, batch_size=len(frames))
+    def classify(self, frames, ids):
+        frames = self._check_pad_sequence(frames)
+        classes = self.model.predict(frames, batch_size=frames.shape[0])
         return np.argmax(classes, 1)
+
+    def _check_pad_sequence(self, frames):
+        return frames
 
     def train(self, x_batch, y_batch):
         y_batch = to_categorical(y_batch, self.classes_count)
+        x_batch = self._check_pad_sequence(x_batch)
         loss = self.model.train_on_batch(x_batch, y_batch)
         print("Loss %s\n" % str(loss))
 

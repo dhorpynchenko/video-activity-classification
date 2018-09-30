@@ -1,7 +1,8 @@
 import argparse
-import os
-import tensorflow as tf
-from classifier2.model import RNNModel
+
+import utils
+from classifier2.model import RNNModel, FrameFeaturesExtractor
+from classifier2.preprocessing import Preprocessing
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(
@@ -29,8 +30,21 @@ parser.add_argument('--mrcnn_weights',
 
 args = parser.parse_args()
 
+activity_classes = utils.load_class_ids(args.activities_classes_names)
 
+preprocessing = Preprocessing(args.mrcnn_object_classes, args.mrcnn_weights)
+extractor = FrameFeaturesExtractor()
+model = RNNModel(FrameFeaturesExtractor.OUTPUT_SIZE, len(activity_classes), False)
+model.restore(args.rnn_weights)
 
+frames = []
+ids = []
 
-model = RNNModel(False)
+for frame_ids, frame in preprocessing.process_video(args.video):
+    frames.append(extractor.extract_features(frame[0]))
+    ids.append(frame_ids)
 
+activity_id = model.classify(frames, ids)
+activity_name = activity_classes[activity_id]
+
+print("Video %s has %s activity" % (args.video, activity_name))

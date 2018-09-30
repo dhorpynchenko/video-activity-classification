@@ -42,22 +42,88 @@ def _convert_to_example(image, label):
         'image/array': bytes_feature(image.tobytes(order='C'))}))
     return example
 
+
 class Preprocessing:
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, mrcnn_classes_file, mrcnn_weights, ) -> None:
+        # Mask-RCNN model
+        classes_ids = utils.load_class_ids(mrcnn_classes_file)
+        config = PreprocConfig(classes_ids)
+
+        # Create model object in inference mode.
+        self.model = MaskRCNN(mode="inference", model_dir="./log", config=config)
+
+        # Load weights trained on MS-COCO
+        self.model.load_weights(mrcnn_weights, by_name=True, exclude=[])
+
+    def process_image_mrcnn(self, image):
+        results = self.model.detect([image], verbose=0)
+        # print("Detecting took %s ms" % (datetime.now() - time))
+        # time = datetime.now()
+        r = results[0]
+        ids = r['class_ids']
+        maschere = r["masks"]
+        return ids, maschere
+
+    def apply_masks_to_image(self, image, masks):
+        for r in range(min(masks.shape[0], image.shape[0])):
+            for c in range(min(masks.shape[1], image.shape[1])):
+                if not np.any(masks[r, c]):
+                    image[r][c] = (0, 0, 0)
+
+    def process_video(self, path):
+        vidcap = None
+        try:
+            vidcap = cv2.VideoCapture(path)
+            if not vidcap.isOpened():
+                print("could not open %s" % path)
+                return
+
+            length = int(vidcap.get(cv2.CAP_PROP_FRAME_COUNT))
+            width = int(vidcap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(vidcap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            fps = vidcap.get(cv2.CAP_PROP_FPS)
+
+            print("Total frames %s, %s x %s, fps %s" % (length, width, height, fps))
+
+            interval = max(1, length // ModelConfig.SEQUENCE_LENGTH)
+
+            count = 0
+            skipping = 0
+            while count < ModelConfig.SEQUENCE_LENGTH:
+                success, image = vidcap.read()
+                if not success:
+                    break
+
+                # image = cv2.resize(image, (OUTPUT_SIZE, int(image.shape[1] * OUTPUT_SIZE / image.shape[0])))
+                # time = datetime.now()
+                image = cv2.resize(image, (ModelConfig.FRAME_SIZE, ModelConfig.FRAME_SIZE))
+                ids, maschere = self.process_image_mrcnn(image)
+
+                if skipping > 100:
+                    break
+
+                if len(ids) == 0:
+                    skipping += 1
+                    print("Skipping frame %s" % skipping)
+                    vidcap.set(cv2.CAP_PROP_POS_FRAMES, (count * interval) + (skipping * int(fps)))
+                    continue
+
+                skipping = 0
+                print("Taking frame %s" % count)
+                # Apply mask to original image
+                self.apply_masks_to_image(image, maschere)
+                yield ids, image
+                count += 1
+                vidcap.set(cv2.CAP_PROP_POS_FRAMES, (count * interval))
+
+        finally:
+            if vidcap is not None:
+                vidcap.release()
 
 
 def main(args):
-    # Mask-RCNN model
-    classes_ids = utils.load_class_ids(args.classes)
-    config = PreprocConfig(classes_ids)
-
-    # Create model object in inference mode.
-    model = MaskRCNN(mode="inference", model_dir="./log", config=config)
-
-    # Load weights trained on MS-COCO
-    model.load_weights(args.model, by_name=True, exclude=[])
+    prepr = Preprocessing(args.classes, args.model)
 
     activity_list = os.listdir(args.input_dir)
     for i, activity in enumerate(activity_list):
@@ -83,63 +149,19 @@ def main(args):
             if os.path.exists(video_output_path):
                 continue
 
+            print("Proccessing video %s from activity %s" % (video_name, activity))
+
             fd, tfile_path = tempfile.mkstemp()
             try:
 
                 writer = tf.python_io.TFRecordWriter(tfile_path)
-                vidcap = cv2.VideoCapture(curr_video_path)
-
-                if not vidcap.isOpened():
-                    print("could not open %s" % curr_video_path)
-                    continue
-
-                length = int(vidcap.get(cv2.CAP_PROP_FRAME_COUNT))
-                width = int(vidcap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                height = int(vidcap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                fps = vidcap.get(cv2.CAP_PROP_FPS)
-
-                print("Processing video %s from activity %s. Total frames %s, %s x %s, fps %s" % (
-                    video_name, activity, length, width, height, fps))
-
-                interval = max(1, length // ModelConfig.SEQUENCE_LENGTH)
-
                 count = 0
-                skipping = 0
-                while count < ModelConfig.SEQUENCE_LENGTH:
-                    success, image = vidcap.read()
-                    if not success:
-                        break
-
-                    # image = cv2.resize(image, (OUTPUT_SIZE, int(image.shape[1] * OUTPUT_SIZE / image.shape[0])))
-                    # time = datetime.now()
-                    image = cv2.resize(image, (ModelConfig.FRAME_SIZE, ModelConfig.FRAME_SIZE))
-                    results = model.detect([image], verbose=0)
-                    # print("Detecting took %s ms" % (datetime.now() - time))
-                    # time = datetime.now()
-                    r = results[0]
-                    ids = r['class_ids']
-                    maschere = r["masks"]
-
-                    if len(ids) == 0 or skipping > 100:
-                        skipping += 1
-                        print("Skipping frame %s" % skipping)
-                        vidcap.set(cv2.CAP_PROP_POS_FRAMES, (count * interval) + (skipping * int(fps)))
-                        continue
-
-                    skipping = 0
-                    print("Taking frame %s" % count)
-                    # Apply mask to original image
-                    for r in range(min(maschere.shape[0], image.shape[0])):
-                        for c in range(min(maschere.shape[1], image.shape[1])):
-                            if not np.any(maschere[r, c]):
-                                image[r][c] = (0, 0, 0)
-
+                for ids, image in prepr.process_video(curr_video_path):
                     example = _convert_to_example(image, ids)
                     # print("Converting took %s ms" % (datetime.now() - time))
                     writer.write(example.SerializeToString())
 
                     count += 1
-                    vidcap.set(cv2.CAP_PROP_POS_FRAMES, (count * interval))
                 print("Count %s" % count)
                 writer.close()
                 shutil.copyfile(tfile_path, video_output_path)
