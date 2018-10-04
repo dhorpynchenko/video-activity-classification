@@ -1,10 +1,12 @@
 import argparse
 
 import utils
-from classifier2.model import RNNModel, FrameFeaturesExtractor
-from classifier2.preprocessing import Preprocessing
+from classifier2.model.model import RNNKerasModel, RNNTensorflowModel
 
 # Parse command line arguments
+from classifier2.preprocessing.features import FrameFeaturesExtractor
+from classifier2.preprocessing.preprocessing import MRCNNPreprocessing
+
 parser = argparse.ArgumentParser(
     description='Classify video/videos provided')
 
@@ -12,13 +14,9 @@ parser.add_argument('--video', required=True,
                     metavar="/path/to/json/",
                     help='Path to video to classify')
 
-parser.add_argument('--rnn_weights', required=True,
+parser.add_argument('--model_dir', required=True,
                     metavar="/path/to/json/",
-                    help='Path to weights')
-
-parser.add_argument('--activities_classes_names', required=True,
-                    metavar="/path/to/json/",
-                    help='Path to file with mappings id:class_name')
+                    help='Path to model configs')
 
 parser.add_argument('--mrcnn_object_classes', required=True,
                     metavar="/path/to/class_ids_file/",
@@ -32,10 +30,10 @@ args = parser.parse_args()
 
 activity_classes = utils.load_class_ids(args.activities_classes_names)
 
-preprocessing = Preprocessing(args.mrcnn_object_classes, args.mrcnn_weights)
+model = RNNTensorflowModel.restore_from_config(args.model_dir)
+preprocessing = MRCNNPreprocessing(args.mrcnn_object_classes, args.mrcnn_weights, model.model_config.sequence_length,
+                                   model.model_config.frame_size)
 extractor = FrameFeaturesExtractor()
-model = RNNModel(FrameFeaturesExtractor.OUTPUT_SIZE, len(activity_classes), False)
-model.restore(args.rnn_weights)
 
 frames = []
 ids = []

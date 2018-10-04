@@ -3,29 +3,13 @@ import os
 import shutil
 import tempfile
 
-import cv2
-from PIL import Image
-
-import utils
-from mrcnn.config import Config
-from mrcnn.model import MaskRCNN
 import tensorflow as tf
-import numpy as np
+
+from classifier2.model.model import ModelConfig
+from classifier2.preprocessing.preprocessing import MRCNNPreprocessing
 from utils import int64_feature, bytes_feature
-from datetime import datetime
-from classifier2.model import ModelConfig
 
 MAX_VIDEOS_PER_CLASS = 100
-
-
-class PreprocConfig(Config):
-    NAME = "preproc"
-    IMAGES_PER_GPU = 1  # 1 reduces training time but gives an error https://github.com/matterport/Mask_RCNN/issues/521
-    DETECTION_MIN_CONFIDENCE = 0.6
-
-    def __init__(self, classes_ids):
-        Config.NUM_CLASSES = len(classes_ids)
-        super().__init__()
 
 
 def _convert_to_example(image, label):
@@ -43,87 +27,9 @@ def _convert_to_example(image, label):
     return example
 
 
-class Preprocessing:
-
-    def __init__(self, mrcnn_classes_file, mrcnn_weights, ) -> None:
-        # Mask-RCNN model
-        classes_ids = utils.load_class_ids(mrcnn_classes_file)
-        config = PreprocConfig(classes_ids)
-
-        # Create model object in inference mode.
-        self.model = MaskRCNN(mode="inference", model_dir="./log", config=config)
-
-        # Load weights trained on MS-COCO
-        self.model.load_weights(mrcnn_weights, by_name=True, exclude=[])
-
-    def process_image_mrcnn(self, image):
-        results = self.model.detect([image], verbose=0)
-        # print("Detecting took %s ms" % (datetime.now() - time))
-        # time = datetime.now()
-        r = results[0]
-        ids = r['class_ids']
-        maschere = r["masks"]
-        return ids, maschere
-
-    def apply_masks_to_image(self, image, masks):
-        for r in range(min(masks.shape[0], image.shape[0])):
-            for c in range(min(masks.shape[1], image.shape[1])):
-                if not np.any(masks[r, c]):
-                    image[r][c] = (0, 0, 0)
-
-    def process_video(self, path):
-        vidcap = None
-        try:
-            vidcap = cv2.VideoCapture(path)
-            if not vidcap.isOpened():
-                print("could not open %s" % path)
-                return
-
-            length = int(vidcap.get(cv2.CAP_PROP_FRAME_COUNT))
-            width = int(vidcap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            height = int(vidcap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            fps = vidcap.get(cv2.CAP_PROP_FPS)
-
-            print("Total frames %s, %s x %s, fps %s" % (length, width, height, fps))
-
-            interval = max(1, length // ModelConfig.SEQUENCE_LENGTH)
-
-            count = 0
-            skipping = 0
-            while count < ModelConfig.SEQUENCE_LENGTH:
-                success, image = vidcap.read()
-                if not success:
-                    break
-
-                # image = cv2.resize(image, (OUTPUT_SIZE, int(image.shape[1] * OUTPUT_SIZE / image.shape[0])))
-                # time = datetime.now()
-                image = cv2.resize(image, (ModelConfig.FRAME_SIZE, ModelConfig.FRAME_SIZE))
-                ids, maschere = self.process_image_mrcnn(image)
-
-                if skipping > 40:
-                    break
-
-                if len(ids) == 0:
-                    skipping += 1
-                    print("Skipping frame %s" % skipping)
-                    vidcap.set(cv2.CAP_PROP_POS_FRAMES, (count * interval) + (skipping * int(fps / 2)))
-                    continue
-
-                skipping = 0
-                print("Taking frame %s" % count)
-                # Apply mask to original image
-                self.apply_masks_to_image(image, maschere)
-                yield ids, image
-                count += 1
-                vidcap.set(cv2.CAP_PROP_POS_FRAMES, (count * interval))
-
-        finally:
-            if vidcap is not None:
-                vidcap.release()
-
-
 def main(args):
-    prepr = Preprocessing(args.classes, args.model)
+    config = ModelConfig.from_file(args.model_config)
+    prepr = MRCNNPreprocessing(args.classes, args.model, config.sequence_length, config.frame_size)
 
     activity_list = os.listdir(args.input_dir)
     for i, activity in enumerate(activity_list):
@@ -188,6 +94,9 @@ if __name__ == '__main__':
     parser.add_argument('--model',
                         metavar="/path/to/weights.h5",
                         help="Path to weights .h5 file")
+    parser.add_argument('--model_config',
+                        metavar="/path/to/weights.h5",
+                        help="Path to model config file")
 
     args = parser.parse_args()
     main(args)

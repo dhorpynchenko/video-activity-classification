@@ -1,15 +1,19 @@
 import argparse
+import itertools
 import os
+from random import shuffle
+
+import numpy as np
 import tensorflow as tf
 
 import utils
-from classifier2.model import RNNModel, ModelConfig, FrameFeaturesExtractor
-import numpy as np
-from classifier2.frames_to_features import CLASS_IDS_FILENAME, INFORMATION_FILENAME, Information
-from random import shuffle
-from tqdm import tqdm
+from sklearn.model_selection import train_test_split
 
-TOTAL_EPOCHS = 100
+from classifier2.model.model import ModelConfig, RNNTensorflowModel
+from classifier2.preprocessing.features import FrameFeaturesExtractor
+from classifier2.preprocessing.preprocessing import NoPreprocessing
+
+TOTAL_EPOCHS = 25
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(
@@ -17,88 +21,94 @@ parser = argparse.ArgumentParser(
 
 parser.add_argument('--input_dir', required=True,
                     metavar="/path/to/json/",
-                    help='Path to directory with activity/video features files')
+                    help='Path to directory with videos')
 
-parser.add_argument('--models_dir', required=True,
+parser.add_argument('--model_dir', required=True,
                     metavar="/path/to/json/",
                     help='Path to directory for checkpoints save')
 
+parser.add_argument('--init_config', required=True,
+                    metavar="/path/to/json/",
+                    help='Path to initial config file')
+
 args = parser.parse_args()
 
-# id:name
-activity_dict = utils.load_class_ids(os.path.join(args.input_dir, CLASS_IDS_FILENAME))
+config = ModelConfig.from_file(args.init_config)
+preproc = NoPreprocessing(config.frame_size)
+extractor = FrameFeaturesExtractor()
+
+activities = os.listdir(args.input_dir)
+
+data_items_paths = list()
+items_activity = dict()
 # name:id
+activity_dict = {}
+for activity_name in activities:
+
+    curr_act_dir = os.path.join(args.input_dir, activity_name)
+
+    if not os.path.isdir(curr_act_dir):
+        continue
+
+    activity_dict[activity_name] = len(activity_dict)
+    items = os.listdir(curr_act_dir)
+
+    for item in items:
+        item_path = os.path.join(curr_act_dir, item)
+        data_items_paths.append(item_path)
+        items_activity[item_path] = activity_name
+
+shuffle(data_items_paths)
+
+# id:name
 rev_activity_dict = utils.make_reversed_dict(activity_dict)
-dataset_info = utils.load_obj(os.path.join(args.input_dir, INFORMATION_FILENAME))
+
+x_train, x_valid = train_test_split(data_items_paths, test_size=0.25)
 
 
-def read_dataset(batch_size, sequence_size):
-    # Read all data items
-    activity_list = os.listdir(args.input_dir)
-    data_items = list()
-    items_activity = dict()
-    for activity_name in activity_list:
-
-        curr_act_dir = os.path.join(args.input_dir, activity_name)
-
-        if not os.path.isdir(curr_act_dir):
-            continue
-
-        current_act_id = rev_activity_dict[activity_name]
-
-        items = os.listdir(curr_act_dir)
-
-        for item in items:
-            item_path = os.path.join(curr_act_dir, item)
-            data_items.append(item_path)
-            items_activity[item_path] = current_act_id
-
-    shuffle(data_items)
-
-    i = 0
-    x_batch = []
-    y_batch = []
-    while i < len(data_items):
-        x_batch.clear()
-        y_batch.clear()
-        while len(x_batch) < batch_size and i < len(data_items):
-            video_path = data_items[i]
-            vid_activ = items_activity[video_path]
-            reader = tf.python_io.tf_record_iterator(video_path)
-
-            frames = list()
-
+def generate_batch(dataset_path):
+    features_size = FrameFeaturesExtractor.OUTPUT_SIZE
+    while True:
+        x_batch = np.zeros((config.batch_size, config.sequence_length, features_size))
+        y_batch = np.zeros(config.batch_size)
+        index = np.random.choice(len(dataset_path), config.batch_size)
+        for i in range(len(index)):
+            item = dataset_path[index[i]]
+            reader = tf.python_io.tf_record_iterator(item)
+            frames = np.zeros((config.sequence_length, features_size))
+            # print("Reading %s" % item)
+            count = 0
             for data in reader:
+                if count >= config.sequence_length:
+                    break
                 input_example = tf.train.Example()
                 input_example.ParseFromString(data)
-                frames.append(
-                    np.frombuffer(input_example.features.feature['image/features'].bytes_list.value[0], np.float32))
 
-            padding = np.zeros([dataset_info.embedding_sizes])
-            while len(frames) < sequence_size:
-                frames.append(padding)
-
-            x_batch.append(frames)
-            y_batch.append(vid_activ)
-            i += 1
+                features = np.frombuffer(input_example.features.feature['image/features'].bytes_list.value[0],
+                                         np.float32)
+                frames[count] = features
+                count += 1
+            reader.close()
+            x_batch[i] = frames
+            y_batch[i] = activity_dict[items_activity[item]]
         yield np.asarray(x_batch), np.asarray(y_batch)
 
 
-model = RNNModel(FrameFeaturesExtractor.OUTPUT_SIZE, len(activity_dict), is_training=True)
-bar = tqdm(range(TOTAL_EPOCHS))
-for i in bar:
-    for x_batch, y_batch in read_dataset(ModelConfig.BATCH_SIZE, ModelConfig.SEQUENCE_LENGTH):
-        r = model.train(x_batch, y_batch)
+# model = RNNKerasModel(FrameFeaturesExtractor.OUTPUT_SIZE, len(activity_dict), ModelConfig.SEQUENCE_LENGTH, is_training=True)
+model = RNNTensorflowModel(FrameFeaturesExtractor.OUTPUT_SIZE, FrameFeaturesExtractor.OUTPUT_SIZE, len(activity_dict), is_training=True)
+for i in range(TOTAL_EPOCHS):
+    print("Epoch %s of %s" % (i, TOTAL_EPOCHS))
+    for x_batch, y_batch in itertools.islice(generate_batch(x_train), None, len(x_train) // config.batch_size):
+        model.train(x_batch, y_batch)
 
-if not os.path.exists(args.models_dir):
-    os.makedirs(args.models_dir)
-model.save(args.models_dir, "weights")
+    total = 0
+    correct = 0
+    for x_v_batch, y_v_batch in itertools.islice(generate_batch(x_valid), None, len(x_valid) // config.batch_size):
+        prediction = model.classify(x_v_batch)
+        for j in range(len(prediction)):
+            total += 1
+            if prediction[j] == y_v_batch[j]:
+                correct += 1
+    print("Evaluation accuracy %s" % (correct / total))
 
-total = 0
-correct = 0
-for frames, ids in read_dataset(20, ModelConfig.SEQUENCE_LENGTH):
-    p = model.classify(frames)
-    c = np.intersect1d(p, ids)
-    total += len(frames)
-    correct = len(c)
-print("Evaluate %s" % (correct / total))
+model.save(args.model_dir)
