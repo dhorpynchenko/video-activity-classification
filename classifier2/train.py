@@ -145,7 +145,7 @@ if __name__ == '__main__':
         model.save_weights(weights_dir, i)
 
     model.save(model_dir)
-    utils.save_class_ids(activity_dict, os.path.join(args.output_dir, ACTIVITY_ID_NAME_MAPPING_FILENAME))
+    utils.save_class_ids(activity_dict, os.path.join(model_dir, ACTIVITY_ID_NAME_MAPPING_FILENAME))
 
     index = np.argmax(history['acc'])
     comment = "Max accuracy {} after {} epoch".format(history['acc'][index], index)
