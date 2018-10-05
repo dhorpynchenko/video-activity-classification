@@ -25,6 +25,18 @@ def load_class_ids(file):
     return classes
 
 
+def save_class_ids(class_ids: dict, file):
+    """
+
+    :param class_ids: name:id
+    :param file: file to save
+    :return:
+    """
+    with open(file, "w") as f:
+        for class_name in class_ids.keys():
+            f.write("{}\t{}\n".format(class_ids[class_name], class_name))
+
+
 def make_reversed_dict(dictionary: dict):
     return dict(zip(dictionary.values(), dictionary.keys()))
 

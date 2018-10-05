@@ -1,7 +1,9 @@
 import argparse
+import os
 
 import utils
-from classifier2.model.model import RNNKerasModel, RNNTensorflowModel
+from classifier2.model.model import ModelFactory
+from classifier2.train import ACTIVITY_ID_NAME_MAPPING_FILENAME
 
 # Parse command line arguments
 from classifier2.preprocessing.features import FrameFeaturesExtractor
@@ -28,9 +30,9 @@ parser.add_argument('--mrcnn_weights',
 
 args = parser.parse_args()
 
-activity_classes = utils.load_class_ids(args.activities_classes_names)
+activity_classes = utils.load_class_ids(os.path.join(args.model_dir, ACTIVITY_ID_NAME_MAPPING_FILENAME))
 
-model = RNNTensorflowModel.restore_from_config(args.model_dir)
+model = ModelFactory.restore_tf_model(args.model_dir)
 preprocessing = MRCNNPreprocessing(args.mrcnn_object_classes, args.mrcnn_weights, model.model_config.sequence_length,
                                    model.model_config.frame_size)
 extractor = FrameFeaturesExtractor()
