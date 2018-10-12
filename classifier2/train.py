@@ -107,7 +107,7 @@ if __name__ == '__main__':
 
     model_dir = os.path.join(args.model_dir, "act_classifier_{:%Y%m%dT%H%M}".format(datetime.datetime.now()))
 
-    model = ModelFactory.new_keras_model(config, FrameFeaturesExtractor.OUTPUT_SIZE, len(activity_dict))
+    model = ModelFactory.new_tf_model(config, FrameFeaturesExtractor.OUTPUT_SIZE, len(activity_dict))
 
     bar = tqdm(range(TOTAL_EPOCHS), "Epoch", TOTAL_EPOCHS)
 

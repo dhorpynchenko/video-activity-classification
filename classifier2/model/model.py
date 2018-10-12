@@ -5,7 +5,7 @@ import keras
 import numpy as np
 import tensorflow as tf
 from keras import Sequential
-from keras.layers import Bidirectional, LSTM, Dense, Activation, Reshape, Dropout
+from keras.layers import Bidirectional, LSTM, Dense, Activation, Reshape, Dropout, GRU
 from keras.optimizers import RMSprop
 from keras.utils.np_utils import to_categorical
 
@@ -96,7 +96,7 @@ class Model:
         self._save_model(config_dir)
 
     @abstractmethod
-    def save_weights(self, config_dir, id=None):
+    def save_weights(self, config_dir, id=None) -> str:
         pass
 
     @abstractmethod
@@ -120,7 +120,6 @@ class RNNKerasModelImpl(Model):
         self.model = Sequential()
         self.model.add(Bidirectional(LSTM(self.model_config.rnn_size, return_sequences=True),
                                      input_shape=(self.model_config.sequence_length, input_embedding_size)))
-        # self.model.add(LSTM(128, return_sequences=True))
         self.model.add(Reshape((-1,)))
         self.model.add(Dense(output_size))
         self.model.add(Activation('softmax'))
@@ -153,14 +152,17 @@ class RNNKerasModelImpl(Model):
             f.write(self.model.to_json())
         self.save_weights(config_dir, Model.WEIGHTS_DEFAULT_ID)
 
-    def save_weights(self, config_dir, id=None):
+    def save_weights(self, config_dir, id=None) -> str:
         file_name = Model.WEIGHTS_DEFAULT_FILENAME
         if id is not None:
             file_name = "{}_{}".format(file_name, id)
         self.model.save_weights(os.path.join(config_dir, "{}.h5".format(file_name)))
+        return file_name
 
 
 class RNNTensorflowModelImpl(Model):
+
+    SAVE_MODEL_DIR = "model"
 
     def _restore_model(self, config_dir):
         self.saver = tf.train.Saver()
@@ -184,6 +186,7 @@ class RNNTensorflowModelImpl(Model):
 
         output = tf.concat([output_fw, output_bw], axis=-1)
         output = tf.reshape(output, (-1, output.shape[1] * output.shape[2]))
+        output = tf.tanh(output)
 
         with tf.name_scope("nn"):
             w = tf.get_variable("w", [output.shape[1], output_size], dtype=output.dtype)
@@ -193,9 +196,9 @@ class RNNTensorflowModelImpl(Model):
 
         with tf.name_scope(name="loss"):
             self.loss = tf.reduce_mean(
-                tf.nn.softmax_cross_entropy_with_logits_v2(labels=input_y_one_hot, logits=l))
+                tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.input_y, logits=l))
 
-        self.optimizer = tf.train.RMSPropOptimizer(learning_rate=0.001).minimize(self.loss)
+        self.optimizer = tf.train.RMSPropOptimizer(learning_rate=0.001, decay=0.0001).minimize(self.loss)
 
         with tf.name_scope("prediction"):
             self.prediction = tf.cast(tf.argmax(tf.nn.softmax(l, axis=-1), axis=-1), dtype=tf.int32)
@@ -206,7 +209,7 @@ class RNNTensorflowModelImpl(Model):
 
     @staticmethod
     def lstm_cell(size):
-        return tf.nn.rnn_cell.LSTMCell(size)
+        return tf.nn.rnn_cell.LSTMCell(size, activation=tf.sigmoid)
 
     def __init__(self) -> None:
         super().__init__()
@@ -225,15 +228,17 @@ class RNNTensorflowModelImpl(Model):
         return pred
 
     def _save_model(self, config_dir):
-        tf.saved_model.simple_save(self.session, config_dir, {"x": self.input_x, "y": self.input_y},
+        save_dir = os.path.join(config_dir, RNNTensorflowModelImpl.SAVE_MODEL_DIR)
+        tf.saved_model.simple_save(self.session, save_dir, {"x": self.input_x, "y": self.input_y},
                                    {"predict": self.prediction})
         self.save_weights(config_dir, Model.WEIGHTS_DEFAULT_ID)
 
-    def save_weights(self, config_dir, id=None):
+    def save_weights(self, config_dir, id=None) -> str:
         file_name = Model.WEIGHTS_DEFAULT_FILENAME
         if id is not None:
             file_name = "{}_{}".format(file_name, id)
         self.saver.save(self.session, os.path.join(config_dir, file_name))
+        return file_name
 
 
 class ModelFactory:
